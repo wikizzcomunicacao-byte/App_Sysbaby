@@ -109,59 +109,49 @@ elif menu == "Ver Projetos & Gerar PDF":
                 p = canvas.Canvas(buffer, pagesize=A4)
                 width, height = A4
 
-                # Cores extraídas da identidade visual da Sis Baby Kids
-                cor_marrom_escuro = colors.HexColor("#5A4A42") # Marrom institucional do logo
-                cor_bege_fundo = colors.HexColor("#F9F6F0")    # Fundo suave e elegante
-                cor_detalhe = colors.HexColor("#A89F91")       # Tom neutro secundário
-                cor_verde_preco = colors.HexColor("#2C5E3B")   # Verde sofisticado para valores
+                # Cores oficiais da identidade visual Sis Baby Kids
+                cor_marrom_escuro = colors.HexColor("#5A4A42")
+                cor_bege_fundo = colors.HexColor("#F9F6F0")
+                cor_detalhe = colors.HexColor("#A89F91")
+                cor_verde_preco = colors.HexColor("#2C5E3B")
 
-                # URL da logo oficial extraída do site
-                logo_url = "https://www.sisbabykids.com.br/core/media/images/logo.png?v=1738760233"
-                logo_path = "temp_logo.png"
-                tem_logo = False
-
-                try:
-                    res_logo = requests.get(logo_url)
-                    if res_logo.status_code == 200:
-                        with open(logo_path, "wb") as f_logo:
-                            f_logo.write(res_logo.content)
-                        tem_logo = True
-                except:
-                    pass
+                # Verifica se o arquivo 'logo.png' existe na pasta do projeto
+                logo_path = "logo.png"
+                tem_logo = os.path.exists(logo_path)
 
                 # --- CAPA DO CATÁLOGO ---
                 p.setFillColor(cor_bege_fundo)
                 p.rect(0, 0, width, height, fill=1, stroke=0)
 
                 if tem_logo:
-                    p.drawImage(logo_path, width / 2 - 90, height / 2 + 80, width=180, height=80, preserveAspectRatio=True, anchor='c')
+                    p.drawImage(logo_path, width / 2 - 100, height / 2 + 60, width=200, height=90, preserveAspectRatio=True, anchor='c')
 
                 p.setFillColor(cor_marrom_escuro)
                 p.setFont("Helvetica-Bold", 24)
-                p.drawCentredString(width / 2, height / 2, "PROPOSTA EXCLUSIVA")
+                p.drawCentredString(width / 2, height / 2 - 10, "PROPOSTA EXCLUSIVA")
                 
                 p.setFont("Helvetica", 12)
                 p.setFillColor(cor_detalhe)
-                p.drawCentredString(width / 2, height / 2 - 30, f"Cliente / Projeto: {projeto_selecionado}")
+                p.drawCentredString(width / 2, height / 2 - 40, f"Cliente / Projeto: {projeto_selecionado}")
 
-                p.showPage() # Vai para as páginas de produtos
+                p.showPage() # Vai para as páginas de produtos (1 móvel por página)
 
                 total_geral = 0
 
-                # --- PÁGINAS DE PRODUTOS ---
+                # --- PÁGINAS DE PRODUTOS (EXatamente 1 móvel por página) ---
                 for idx, item in enumerate(itens, 1):
                     try:
                         total_geral += float(item.get('preco') or 0)
                     except:
                         pass
 
-                    # Fundo suave padrão Sis Baby Kids
+                    # Fundo suave padrão
                     p.setFillColor(cor_bege_fundo)
                     p.rect(0, 0, width, height, fill=1, stroke=0)
 
-                    # Cabeçalho com Logo
+                    # Cabeçalho com a Logo Fixa
                     if tem_logo:
-                        p.drawImage(logo_path, 40, height - 55, width=100, height=45, preserveAspectRatio=True, anchor='w')
+                        p.drawImage(logo_path, 40, height - 60, width=110, height=50, preserveAspectRatio=True, anchor='w')
                     
                     p.setFont("Helvetica", 10)
                     p.setFillColor(cor_detalhe)
@@ -187,7 +177,7 @@ elif menu == "Ver Projetos & Gerar PDF":
                     p.setFillColor(cor_verde_preco)
                     p.drawRightString(width - 40, height - 125, f"R$ {float(preco_val):,.2f}")
 
-                    # FOTO GRANDE EM DESTAQUE (Vitrine)
+                    # FOTO GRANDE EM DESTAQUE (Vitrine isolada)
                     foto_url = item.get('foto_url')
                     if foto_url:
                         try:
@@ -201,10 +191,10 @@ elif menu == "Ver Projetos & Gerar PDF":
                                 # Moldura elegante para a foto do móvel
                                 p.setFillColor(colors.white)
                                 p.setStrokeColor(colors.HexColor("#E3DCD3"))
-                                p.roundRect(35, 100, width - 70, height - 260, 8, fill=1, stroke=1)
+                                p.roundRect(35, 95, width - 70, height - 250, 8, fill=1, stroke=1)
                                 
                                 # Imagem centralizada e ampla
-                                p.drawImage(img_temp_path, 50, 115, width=width - 100, height=height - 290, preserveAspectRatio=True, anchor='c')
+                                p.drawImage(img_temp_path, 50, 110, width=width - 100, height=height - 280, preserveAspectRatio=True, anchor='c')
                                 
                                 if os.path.exists(img_temp_path):
                                     os.remove(img_temp_path)
@@ -213,30 +203,29 @@ elif menu == "Ver Projetos & Gerar PDF":
 
                     p.showPage()
 
-                # Remove o arquivo temporário da logo
-                if os.path.exists(logo_path):
-                    os.remove(logo_path)
-
                 # --- PÁGINA FINAL (RESUMO) ---
                 p.setFillColor(cor_bege_fundo)
                 p.rect(0, 0, width, height, fill=1, stroke=0)
 
+                if tem_logo:
+                    p.drawImage(logo_path, width / 2 - 80, height / 2 + 100, width=160, height=70, preserveAspectRatio=True, anchor='c')
+
                 p.setFillColor(cor_marrom_escuro)
                 p.setFont("Helvetica-Bold", 20)
-                p.drawCentredString(width / 2, height / 2 + 50, "RESUMO DO INVESTIMENTO")
+                p.drawCentredString(width / 2, height / 2 + 20, "RESUMO DO INVESTIMENTO")
 
                 p.setFont("Helvetica", 12)
                 p.setFillColor(cor_detalhe)
-                p.drawCentredString(width / 2, height / 2 + 20, f"Projeto: {projeto_selecionado}")
+                p.drawCentredString(width / 2, height / 2 - 10, f"Projeto: {projeto_selecionado}")
 
-                # Quadro de Valor Total com borda no estilo da marca
+                # Quadro de Valor Total estilizado
                 p.setStrokeColor(cor_marrom_escuro)
                 p.setLineWidth(1.5)
-                p.roundRect(width / 2 - 175, height / 2 - 50, 350, 50, 6, fill=0, stroke=1)
+                p.roundRect(width / 2 - 175, height / 2 - 80, 350, 50, 6, fill=0, stroke=1)
 
                 p.setFillColor(cor_marrom_escuro)
                 p.setFont("Helvetica-Bold", 16)
-                p.drawCentredString(width / 2, height / 2 - 20, f"VALOR TOTAL: R$ {total_geral:,.2f}")
+                p.drawCentredString(width / 2, height / 2 - 50, f"VALOR TOTAL: R$ {total_geral:,.2f}")
 
                 p.setFont("Helvetica", 9)
                 p.setFillColor(cor_detalhe)
