@@ -10,7 +10,26 @@ import os
 import urllib.parse
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="Sys Baby Kids - Móveis", layout="wide")
+st.set_page_config(page_title="Sys Baby Kids - Sistema de Móveis", layout="wide", page_icon="🗄️")
+
+# --- ESTILIZAÇÃO CSS CUSTOMIZADA PARA VISUAL DE LUXO ---
+st.markdown("""
+    <style>
+        .main {
+            background-color: #F9F6F0;
+        }
+        .stButton>button {
+            border-radius: 6px;
+            font-weight: 600;
+        }
+        div[data-testid="stForm"] {
+            background-color: #FFFFFF;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 # --- CONEXÃO SEGURA COM O SUPABASE ---
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -19,42 +38,43 @@ SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # --- TELA DE LOGIN SIMPLES ---
-st.title("🗄️ Sistema de Móveis - Sys Baby Kids")
+st.title("🗄️ Sys Baby Kids — Painel de Gestão e Propostas")
 st.markdown("---")
 
-# Defina aqui a senha de acesso desejada
 SENHA_MESTRE = "sysbaby2026"
 
-# Cria um campo de senha na tela inicial
 senha_digitada = st.text_input("🔒 Digite a senha de acesso ao sistema:", type="password")
 
 if not senha_digitada:
     st.info("Por favor, digite a senha para acessar o painel de controle.")
-    st.stop() # Interrompe a execução para não mostrar o restante do sistema sem a senha
+    st.stop()
 
 if senha_digitada != SENHA_MESTRE:
     st.error("❌ Senha incorreta! Acesso negado.")
-    st.stop() # Interrompe a execução caso a senha esteja errada
+    st.stop()
 
-# --- SISTEMA PRINCIPAL (Liberado apenas após a senha correta) ---
-st.success("✅ Acesso autorizado!")
+st.success("✅ Acesso autorizado com sucesso!")
 
-# Menu em formato de abas direto na página principal
-aba1, aba2 = st.tabs(["📦 Cadastrar Novo Item", "📊 Ver Projetos & Gerar PDF"])
+# Menu em formato de abas limpo e moderno
+aba1, aba2 = st.tabs(["📦 Cadastrar Novo Item", "📊 Gerenciar Projetos & Propostas"])
 
 with aba1:
     st.header("Cadastrar Peças / Móveis")
+    st.markdown("Preencha os dados abaixo para adicionar um novo item ao catálogo do projeto.")
     
     with st.form("form_cadastro", clear_on_submit=True):
-        projeto = st.text_input("Nome do Projeto / Cliente (Ex: Quarto da Mini)")
-        ambiente = st.text_input("Ambiente / Móvel (Ex: Berço Safari)")
-        fornecedor = st.text_input("Fornecedor")
-        dimensoes = st.text_input("Dimensões (Ex: 1.20 x 0.80m)")
-        preco = st.number_input("Preço (R$)", min_value=0.0, format="%.2f")
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            projeto = st.text_input("Nome do Projeto / Cliente (Ex: Quarto da Mini)")
+            fornecedor = st.text_input("Fornecedor")
+            preco = st.number_input("Preço (R$)", min_value=0.0, format="%.2f")
+        with col_f2:
+            ambiente = st.text_input("Ambiente / Móvel (Ex: Berço Safari)")
+            dimensoes = st.text_input("Dimensões (Ex: 1.20 x 0.80m)")
         
         fotos_files = st.file_uploader("Fotos do Produto", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
         
-        submitted = st.form_submit_button("Salvar no Sistema")
+        submitted = st.form_submit_button("💾 Salvar no Sistema", use_container_width=True)
         
         if submitted:
             if not projeto or not ambiente:
@@ -100,7 +120,7 @@ with aba1:
                         st.success(f"{len(fotos_files)} foto(s) cadastrada(s) com sucesso!")
 
 with aba2:
-    st.header("Gerenciar Projetos & Gerar PDF")
+    st.header("Gerenciamento de Projetos")
     
     try:
         response = supabase.table("projetos_moveis").select("projeto").execute()
@@ -109,47 +129,53 @@ with aba2:
         if not projetos:
             st.info("Nenhum projeto cadastrado ainda.")
         else:
-            projeto_selecionado = st.selectbox("Selecione o Projeto para visualizar", projetos)
-            
-            telefone_cliente = st.text_input("Telefone do Cliente com DDD (Ex: 17999998888) - Opcional")
+            col_sel1, col_sel2 = st.columns([2, 1])
+            with col_sel1:
+                projeto_selecionado = st.selectbox("Selecione o Projeto para visualizar", projetos)
+            with col_sel2:
+                telefone_cliente = st.text_input("WhatsApp do Cliente (Opcional)", placeholder="17999998888")
             
             itens_resp = supabase.table("projetos_moveis").select("*").eq("projeto", projeto_selecionado).execute()
             itens = itens_resp.data
             
-            st.markdown("### Selecione os itens, Edite ou Exclua:")
+            st.markdown("### Selecione os itens para a proposta:")
             
             itens_selecionados = []
             
             for item in itens:
-                st.markdown("---")
                 item_id = item.get("id")
                 
-                marcado = st.checkbox(f"Incluir na proposta: **{item.get('ambiente')}** (R$ {item.get('preco')})", value=True, key=f"item_{item_id}")
-                
-                col1, col2, col3 = st.columns([1, 2, 1])
-                with col1:
-                    if item.get("foto_url"):
-                        st.image(item["foto_url"], width=130)
-                
-                with col2:
-                    st.subheader(f"{item.get('ambiente')}")
-                    st.write(f"**Fornecedor:** {item.get('fornecedor')}")
-                    st.write(f"**Dimensões:** {item.get('dimensoes')}")
-                    st.write(f"**Preço:** R$ {item.get('preco')}")
-                
-                with col3:
-                    st.write("**Ações:**")
-                    editar_click = st.button("✏️ Editar", key=f"edit_btn_{item_id}")
-                    excluir_click = st.button("🗑️ Excluir", key=f"del_btn_{item_id}")
+                # Exibição em formato de Cartão/Card Limpo
+                with st.container(border=True):
+                    marcado = st.checkbox(f"Incluir na proposta: **{item.get('ambiente')}**", value=True, key=f"item_{item_id}")
                     
-                    if excluir_click:
-                        try:
-                            supabase.table("projetos_moveis").delete().eq("id", item_id).execute()
-                            st.success(f"Item '{item.get('ambiente')}' excluído com sucesso!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro ao excluir: {e}")
+                    col_img, col_info, col_acoes = st.columns([1, 2.5, 1])
+                    with col_img:
+                        if item.get("foto_url"):
+                            st.image(item["foto_url"], width=130)
+                        else:
+                            st.info("Sem foto")
+                    
+                    with col_info:
+                        st.subheader(f"{item.get('ambiente')}")
+                        st.write(f"**Fornecedor:** {item.get('fornecedor') or 'Não informado'}")
+                        st.write(f"**Dimensões:** {item.get('dimensoes') or 'Não informado'}")
+                        st.markdown(f"<span style='color: #2C5E3B; font-weight: bold; font-size: 1.1em;'>R$ {float(item.get('preco') or 0):,.2f}</span>", unsafe_allow_html=True)
+                    
+                    with col_acoes:
+                        st.write("**Ações:**")
+                        editar_click = st.button("✏️ Editar", key=f"edit_btn_{item_id}", use_container_width=True)
+                        excluir_click = st.button("🗑️ Excluir", key=f"del_btn_{item_id}", use_container_width=True)
+                        
+                        if excluir_click:
+                            try:
+                                supabase.table("projetos_moveis").delete().eq("id", item_id).execute()
+                                st.success("Item excluído com sucesso!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro ao excluir: {e}")
 
+                # Bloco de edição se ativado
                 if st.session_state.get(f"edit_mode_{item_id}", False):
                     with st.form(f"form_edit_{item_id}"):
                         st.markdown(f"**Editando: {item.get('ambiente')}**")
@@ -158,8 +184,11 @@ with aba2:
                         novas_dimensoes = st.text_input("Dimensões", value=item.get("dimensoes") or "")
                         novo_preco = st.number_input("Preço (R$)", min_value=0.0, value=float(item.get("preco") or 0.0), format="%.2f")
                         
-                        salvar_edicao = st.form_submit_button("💾 Salvar Alterações")
-                        cancelar_edicao = st.form_submit_button("❌ Cancelar")
+                        col_e1, col_e2 = st.columns(2)
+                        with col_e1:
+                            salvar_edicao = st.form_submit_button("💾 Salvar", use_container_width=True)
+                        with col_e2:
+                            cancelar_edicao = st.form_submit_button("❌ Cancelar", use_container_width=True)
                         
                         if salvar_edicao:
                             supabase.table("projetos_moveis").update({
@@ -169,7 +198,7 @@ with aba2:
                                 "preco": novo_preco
                             }).eq("id", item_id).execute()
                             st.session_state[f"edit_mode_{item_id}"] = False
-                            st.success("Alterações salvas com sucesso!")
+                            st.success("Salvo com sucesso!")
                             st.rerun()
                         
                         if cancelar_edicao:
@@ -184,9 +213,9 @@ with aba2:
                     itens_selecionados.append(item)
 
             st.markdown("---")
-            st.markdown("### Gerar Proposta Comercial de Luxo")
+            st.markdown("### Geração da Proposta Comercial")
             
-            if st.button("📄 Criar PDF Estilo Luxo"):
+            if st.button("📄 Criar PDF Estilo Luxo", use_container_width=True):
                 if not itens_selecionados:
                     st.warning("Selecione pelo menos um item para gerar o PDF!")
                 else:
@@ -332,7 +361,8 @@ with aba2:
                     label="📥 Baixar Proposta em PDF",
                     data=st.session_state["pdf_data"],
                     file_name=st.session_state["pdf_nome"],
-                    mime="application/pdf"
+                    mime="application/pdf",
+                    use_container_width=True
                 )
 
                 total_val = st.session_state.get("total_geral", 0)
@@ -342,7 +372,7 @@ with aba2:
 
                 st.markdown(
                     f"""
-                    <a href="{link_whatsapp}" target="_blank" style="display:inline-block;padding:10px 20px;background-color:#25D366;color:white;text-decoration:none;font-weight:bold;border-radius:6px;margin-top:10px;">
+                    <a href="{link_whatsapp}" target="_blank" style="display:block;text-align:center;padding:12px 20px;background-color:#25D366;color:white;text-decoration:none;font-weight:bold;border-radius:6px;margin-top:10px;">
                         💬 Abrir WhatsApp com Mensagem Pronta
                     </a>
                     """,
