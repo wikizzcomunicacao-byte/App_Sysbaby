@@ -58,19 +58,24 @@ with st.sidebar:
 abas_nomes = ["📊 Ver Projetos & Gerar PDF", "📦 Cadastrar Novo Item (Requer Senha)"]
 aba_pdf, aba_cad = st.tabs(abas_nomes)
 
-# --- FUNÇÃO CORRIGIDA PARA REDUZIR O TAMANHO DA FOTO ---
-def otimizar_imagem(imagem_file, max_largura=1000, qualidade=75):
+# --- FUNÇÃO REFORÇADA PARA COMPRESSÃO DE IMAGEM ---
+def otimizar_imagem(imagem_file):
+    # Abre a imagem original enviada pelo uploader
     img = PILImage.open(imagem_file)
     
+    # Converte para RGB se tiver transparência ou formato incompatível com JPEG
     if img.mode in ("RGBA", "P"):
         img = img.convert("RGB")
         
+    # Redimensiona agressivamente para garantir que a largura máxima seja de 900 pixels
+    max_largura = 900
     if img.width > max_largura:
         nova_altura = int((max_largura / img.width) * img.height)
         img = img.resize((max_largura, nova_altura), PILImage.Resampling.LANCZOS)
         
+    # Salva no buffer com qualidade 70% (comprime bastante o arquivo, mantendo excelente nitidez para catálogo)
     buffer_out = io.BytesIO()
-    img.save(buffer_out, format="JPEG", quality=qualidade)
+    img.save(buffer_out, format="JPEG", quality=70, optimize=True)
     buffer_out.seek(0)
     return buffer_out
 
@@ -112,6 +117,7 @@ with aba_cad:
                         sucesso = True
                         for foto_file in fotos_files:
                             try:
+                                # Chama a função que compacta a imagem de verdade
                                 foto_otimizada = otimizar_imagem(foto_file)
                                 file_bytes = foto_otimizada.read()
                                 
@@ -140,7 +146,7 @@ with aba_cad:
                                 st.warning(f"Erro ao enviar a foto {foto_file.name}: {e}")
                         
                         if sucesso:
-                            st.success(f"{len(fotos_files)} foto(s) compactada(s) e cadastrada(s) com sucesso!")
+                            st.success(f"{len(fotos_files)} foto(s) compactada(s) com sucesso!")
 
 with aba_pdf:
     st.header("Gerenciamento de Projetos e Propostas")
