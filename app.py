@@ -60,12 +60,10 @@ with st.sidebar:
 abas_nomes = ["📊 Ver Projetos & Gerar PDF", "📦 Cadastrar Novo Item (Requer Senha)"]
 aba_pdf, aba_cad = st.tabs(abas_nomes)
 
-# --- FUNÇÃO PARA REMOVER ACENTOS E CARACTERES ESPECIAIS DO NOME DO ARQUIVO ---
+# --- FUNÇÃO PARA REMOVER ACENTOS E CARACTERES ESPECIAIS ---
 def limpar_nome_arquivo(texto):
-    # Remove acentos (ex: ç -> c, é -> e)
     nfkd = unicodedata.normalize('NFKD', texto)
     texto_sem_acento = "".join([c for c in nfkd if not unicodedata.combining(c)])
-    # Substitui espaços e caracteres especiais por sublinhado
     texto_limpo = re.sub(r'[^a-zA-Z0-9_-]', '_', texto_sem_acento)
     return texto_limpo
 
@@ -127,7 +125,6 @@ with aba_cad:
                                 foto_otimizada = otimizar_imagem(foto_file)
                                 file_bytes = foto_otimizada.read()
                                 
-                                # Limpa o nome do projeto e do arquivo para evitar erros no Supabase
                                 projeto_limpo = limpar_nome_arquivo(projeto)
                                 nome_original_limpo = limpar_nome_arquivo(os.path.splitext(foto_file.name)[0])
                                 file_name = f"{projeto_limpo}_{nome_original_limpo}.jpg"
