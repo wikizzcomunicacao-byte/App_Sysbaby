@@ -160,29 +160,28 @@ with aba_pdf:
     st.header("Catálogo Geral & Seleção por Lista")
     
     try:
-        # Busca os itens ordenados alfabeticamente pelo nome (ambiente)
         response = supabase.table("projetos_moveis").select("*").order("ambiente", desc=False).execute()
         itens = response.data if response.data else []
         
         if not itens:
             st.info("Nenhum item cadastrado no sistema ainda.")
         else:
-            # Cria a lista de opções em ordem alfabética para o selectbox
             lista_nomes_itens = [item.get("ambiente") for item in itens]
             
             st.markdown("### Selecione um item na lista para visualizar, editar ou incluir:")
             
-            # Caixa de seleção (selectbox) em ordem alfabética onde você digita ou escolhe facilmente
             item_selecionado_nome = st.selectbox("Escolha o item:", lista_nomes_itens)
             
-            # Pega os dados do item escolhido na lista
             item_atual = next((i for i in itens if i.get("ambiente") == item_selecionado_nome), None)
             
             if item_atual:
                 item_id = item_atual.get("id")
                 
                 with st.container(border=True):
-                    col_img, col_info, col_acoes = st.columns([1, 2.5, 1]) if admin_autenticado else st.columns([1, 3])
+                    if admin_autenticado:
+                        col_img, col_info, col_acoes = st.columns([1, 2.5, 1])
+                    else:
+                        col_img, col_info = st.columns([1, 3])
                     
                     with col_img:
                         if item_atual.get("foto_url"):
@@ -210,7 +209,6 @@ with aba_pdf:
                                 except Exception as e:
                                     st.error(f"Erro ao excluir: {e}")
 
-                # Bloco de edição caso clique em editar
                 if admin_autenticado and st.session_state.get(f"edit_mode_{item_id}", False):
                     with st.form(f"form_edit_{item_id}"):
                         st.markdown(f"**Editando: {item_atual.get('ambiente')}**")
@@ -247,7 +245,6 @@ with aba_pdf:
                     st.session_state[f"edit_mode_{item_id}"] = True
                     st.rerun()
 
-            # Opção de gerar PDF com todos ou selecionar itens
             st.markdown("---")
             st.markdown("### Geração da Proposta Comercial")
             
