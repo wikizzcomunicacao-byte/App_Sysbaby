@@ -82,7 +82,7 @@ with aba1:
                         st.success(f"{len(fotos_files)} foto(s) cadastrada(s) com sucesso!")
 
 with aba2:
-    st.header("Projetos Cadastrados")
+    st.header("Gerenciar Projetos & Gerar PDF")
     
     try:
         response = supabase.table("projetos_moveis").select("projeto").execute()
@@ -98,23 +98,73 @@ with aba2:
             itens_resp = supabase.table("projetos_moveis").select("*").eq("projeto", projeto_selecionado).execute()
             itens = itens_resp.data
             
-            st.markdown("### Selecione os itens que deseja incluir na Proposta:")
+            st.markdown("### Selecione os itens, Edite ou Exclua:")
             
             itens_selecionados = []
             
             for item in itens:
                 st.markdown("---")
-                marcado = st.checkbox(f"Incluir na proposta: **{item.get('ambiente')}** (R$ {item.get('preco')})", value=True, key=f"item_{item.get('id')}")
+                item_id = item.get("id")
                 
-                col1, col2 = st.columns([1, 2])
+                # Checkbox de inclusão no PDF
+                marcado = st.checkbox(f"Incluir na proposta: **{item.get('ambiente')}** (R$ {item.get('preco')})", value=True, key=f"item_{item_id}")
+                
+                col1, col2, col3 = st.columns([1, 2, 1])
                 with col1:
                     if item.get("foto_url"):
-                        st.image(item["foto_url"], width=150)
+                        st.image(item["foto_url"], width=130)
+                
                 with col2:
                     st.subheader(f"{item.get('ambiente')}")
                     st.write(f"**Fornecedor:** {item.get('fornecedor')}")
                     st.write(f"**Dimensões:** {item.get('dimensoes')}")
                     st.write(f"**Preço:** R$ {item.get('preco')}")
+                
+                with col3:
+                    st.write("**Ações:**")
+                    # Botão para abrir o modo de edição deste item específico
+                    editar_click = st.button("✏️ Editar", key=f"edit_btn_{item_id}")
+                    # Botão para excluir o item do banco de dados
+                    excluir_click = st.button("🗑️ Excluir", key=f"del_btn_{item_id}")
+                    
+                    if excluir_click:
+                        try:
+                            supabase.table("projetos_moveis").delete().eq("id", item_id).execute()
+                            st.success(f"Item '{item.get('ambiente')}' excluído com sucesso!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao excluir: {e}")
+
+                # Bloco de Edição Expandido se o botão Editar for acionado
+                if st.session_state.get(f"edit_mode_{item_id}", False):
+                    with st.form(f"form_edit_{item_id}"):
+                        st.markdown(f"**Editando: {item.get('ambiente')}**")
+                        novo_ambiente = st.text_input("Ambiente / Móvel", value=item.get("ambiente"))
+                        novo_fornecedor = st.text_input("Fornecedor", value=item.get("fornecedor") or "")
+                        novas_dimensoes = st.text_input("Dimensões", value=item.get("dimensoes") or "")
+                        novo_preco = st.number_input("Preço (R$)", min_value=0.0, value=float(item.get("preco") or 0.0), format="%.2f")
+                        
+                        salvar_edicao = st.form_submit_button("💾 Salvar Alterações")
+                        cancelar_edicao = st.form_submit_button("❌ Cancelar")
+                        
+                        if salvar_edicao:
+                            supabase.table("projetos_moveis").update({
+                                "ambiente": novo_ambiente,
+                                "fornecedor": novo_fornecedor,
+                                "dimensoes": novas_dimensoes,
+                                "preco": novo_preco
+                            }).eq("id", item_id).execute()
+                            st.session_state[f"edit_mode_{item_id}"] = False
+                            st.success("Alterações salvas com sucesso!")
+                            st.rerun()
+                        
+                        if cancelar_edicao:
+                            st.session_state[f"edit_mode_{item_id}"] = False
+                            st.rerun()
+
+                if editar_click:
+                    st.session_state[f"edit_mode_{item_id}"] = True
+                    st.rerun()
                 
                 if marcado:
                     itens_selecionados.append(item)
@@ -204,9 +254,8 @@ with aba2:
                                 if response_img.status_code == 200:
                                     img_io = io.BytesIO(response_img.content)
                                     img = PILImage.open(img_io)
-                                    img.verify() # Valida se é uma imagem real
+                                    img.verify()
                                     
-                                    # Reabre a imagem após a verificação
                                     img = PILImage.open(io.BytesIO(response_img.content))
                                     img_path = f"temp_item_{idx}.jpg"
                                     img.save(img_path)
@@ -219,7 +268,6 @@ with aba2:
                             except Exception as img_err:
                                 print(f"Erro ao inserir imagem {idx}: {img_err}")
 
-                        # Se não houver foto válida, exibe um aviso elegante dentro do espaço
                         if not imagem_carregada:
                             p.setFillColor(colors.HexColor("#9CA3AF"))
                             p.setFont("Helvetica", 12)
