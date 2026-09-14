@@ -190,26 +190,40 @@ with aba2:
                         p.setLineWidth(1)
                         p.line(40, height - 130, width - 40, height - 130)
 
+                        # Moldura da foto
+                        p.setFillColor(colors.white)
+                        p.setStrokeColor(colors.HexColor("#D1D5DB"))
+                        p.roundRect(35, 120, width - 70, height - 280, 8, fill=1, stroke=1)
+
                         foto_url = item.get('foto_url')
-                        if foto_url:
+                        imagem_carregada = False
+
+                        if foto_url and foto_url.strip() != "":
                             try:
-                                response_img = requests.get(foto_url)
+                                response_img = requests.get(foto_url.strip(), timeout=10)
                                 if response_img.status_code == 200:
                                     img_io = io.BytesIO(response_img.content)
                                     img = PILImage.open(img_io)
-                                    img_path = f"temp_{item.get('id')}.jpg"
+                                    img.verify() # Valida se é uma imagem real
+                                    
+                                    # Reabre a imagem após a verificação
+                                    img = PILImage.open(io.BytesIO(response_img.content))
+                                    img_path = f"temp_item_{idx}.jpg"
                                     img.save(img_path)
                                     
-                                    p.setFillColor(colors.white)
-                                    p.setStrokeColor(colors.HexColor("#D1D5DB"))
-                                    p.roundRect(35, 120, width - 70, height - 280, 8, fill=1, stroke=1)
-                                    
-                                    p.drawImage(img_path, 50, 135, width=width - 100, height=height - 310, preserveAspectRatio=True, anchor='c')
+                                    p.drawImage(img_path, 50, 135, width=width - 100, height=height - 280, preserveAspectRatio=True, anchor='c')
+                                    imagem_carregada = True
                                     
                                     if os.path.exists(img_path):
                                         os.remove(img_path)
                             except Exception as img_err:
-                                print(f"Erro ao inserir imagem: {img_err}")
+                                print(f"Erro ao inserir imagem {idx}: {img_err}")
+
+                        # Se não houver foto válida, exibe um aviso elegante dentro do espaço
+                        if not imagem_carregada:
+                            p.setFillColor(colors.HexColor("#9CA3AF"))
+                            p.setFont("Helvetica", 12)
+                            p.drawCentredString(width / 2, height / 2, "Sem foto cadastrada para este item")
 
                         p.setFillColor(cor_texto_cinza)
                         p.setFont("Helvetica", 9)
