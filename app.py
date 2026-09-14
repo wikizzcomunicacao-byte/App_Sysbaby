@@ -102,25 +102,25 @@ elif menu == "Ver Projetos & Gerar PDF":
                     st.write(f"**Dimensões:** {item.get('dimensoes')}")
                     st.write(f"**Preço:** R$ {item.get('preco')}")
 
-            # Botão para gerar o PDF Comercial com Fotos Grandes
+            # Botão para gerar o PDF com Fotos Enormes (Estilo Catálogo de Alta Qualidade)
             st.markdown("### Gerar Proposta Comercial")
-            if st.button("📄 Criar PDF com Fotos Grandes"):
+            if st.button("📄 Criar PDF com Fotos Enormes"):
                 buffer = io.BytesIO()
                 p = canvas.Canvas(buffer, pagesize=A4)
                 width, height = A4
 
                 # Cabeçalho Elegante
                 p.setFillColor(colors.HexColor("#1e293b"))
-                p.rect(0, height - 60, width, 60, fill=1, stroke=0)
+                p.rect(0, height - 55, width, 55, fill=1, stroke=0)
                 
                 p.setFillColor(colors.white)
-                p.setFont("Helvetica-Bold", 15)
-                p.drawString(40, height - 25, "Senhora Lavanderia & Móveis")
+                p.setFont("Helvetica-Bold", 14)
+                p.drawString(40, height - 22, "Senhora Lavanderia & Móveis")
                 p.setFont("Helvetica", 10)
-                p.drawString(40, height - 43, f"Proposta Comercial - Projeto: {projeto_selecionado}")
+                p.drawString(40, height - 38, f"Proposta Comercial - Projeto: {projeto_selecionado}")
 
                 total_geral = 0
-                y = height - 90
+                y = height - 80
 
                 for item in itens:
                     try:
@@ -128,31 +128,31 @@ elif menu == "Ver Projetos & Gerar PDF":
                     except:
                         pass
 
-                    # Cada item vai ocupar um bloco grande (240 pontos de altura). Se não couber, vai pra próxima página.
-                    if y < 260:
+                    # Cada item agora ocupa um bloco bem maior (330 pontos de altura) para a foto ficar gigante
+                    if y < 340:
                         p.showPage()
                         y = height - 50
 
                     # Caixa de fundo para o item
                     p.setFillColor(colors.HexColor("#f8fafc"))
                     p.setStrokeColor(colors.HexColor("#cbd5e1"))
-                    p.roundRect(40, y - 230, width - 80, 220, 8, fill=1, stroke=1)
+                    p.roundRect(30, y - 315, width - 60, 310, 8, fill=1, stroke=1)
 
-                    # Informações do Móvel (Texto acima)
+                    # Informações do Móvel no topo do bloco
                     p.setFillColor(colors.HexColor("#0f172a"))
-                    p.setFont("Helvetica-Bold", 13)
-                    p.drawString(55, y - 25, f"Ambiente: {item.get('ambiente')}")
+                    p.setFont("Helvetica-Bold", 12)
+                    p.drawString(45, y - 25, f"Ambiente: {item.get('ambiente')}")
 
                     p.setFont("Helvetica", 10)
                     p.setFillColor(colors.HexColor("#334155"))
-                    p.drawString(55, y - 45, f"Fornecedor: {item.get('fornecedor') or 'N/D'}")
+                    p.drawString(45, y - 45, f"Fornecedor: {item.get('fornecedor') or 'N/D'}")
                     p.drawString(220, y - 45, f"Dimensões: {item.get('dimensoes') or 'N/D'}")
 
                     p.setFont("Helvetica-Bold", 12)
                     p.setFillColor(colors.HexColor("#16a34a")) # Verde destaque
-                    p.drawString(400, y - 45, f"R$ {item.get('preco') or '0.00'}")
+                    p.drawString(420, y - 45, f"R$ {item.get('preco') or '0.00'}")
 
-                    # FOTO GRANDE EM DESTAQUE (Vitrine do Móvel)
+                    # FOTO GIGANTE EM DESTAQUE (Ocupando quase todo o espaço central)
                     foto_url = item.get('foto_url')
                     if foto_url:
                         try:
@@ -163,15 +163,15 @@ elif menu == "Ver Projetos & Gerar PDF":
                                 img_path = f"temp_{item.get('id')}.jpg"
                                 img.save(img_path)
                                 
-                                # Foto grande centralizada na caixa (Largura: 320, Altura: 150)
-                                p.drawImage(img_path, 135, y - 210, width=320, height=145, preserveAspectRatio=True, anchor='c')
+                                # Foto com largura grande (480px) e altura expandida (230px) centralizada
+                                p.drawImage(img_path, 45, y - 290, width=515, height=230, preserveAspectRatio=True, anchor='c')
                                 
                                 if os.path.exists(img_path):
                                     os.remove(img_path)
                         except Exception as img_err:
                             print(f"Erro ao inserir imagem no PDF: {img_err}")
 
-                    y -= 245
+                    y -= 330
 
                 # Rodapé com Valor Total
                 if y < 80:
@@ -179,16 +179,16 @@ elif menu == "Ver Projetos & Gerar PDF":
                     y = height - 50
 
                 p.setFillColor(colors.HexColor("#1e293b"))
-                p.roundRect(40, y - 35, width - 80, 32, 4, fill=1, stroke=0)
+                p.roundRect(30, y - 35, width - 60, 32, 4, fill=1, stroke=0)
                 p.setFillColor(colors.white)
                 p.setFont("Helvetica-Bold", 12)
-                p.drawString(55, y - 18, f"VALOR TOTAL DO PROJETO: R$ {total_geral:.2f}")
+                p.drawString(45, y - 18, f"VALOR TOTAL DO PROJETO: R$ {total_geral:.2f}")
 
                 p.save()
                 buffer.seek(0)
                 
                 st.download_button(
-                    label="📥 Baixar PDF com Fotos Grandes",
+                    label="📥 Baixar PDF com Fotos Gigantes",
                     data=buffer,
                     file_name=f"Proposta_{projeto_selecionado.replace(' ', '_')}.pdf",
                     mime="application/pdf"
