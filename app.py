@@ -2,6 +2,7 @@ import streamlit as st
 from supabase import create_client, Client
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+from reportlab.lib import colors
 import io
 import requests
 from PIL import Image as PILImage
@@ -15,7 +16,6 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 st.title("🗄️ Sistema de Móveis Planejados - Senhora Lavanderia")
 
-# Menu lateral
 menu = st.sidebar.selectbox("Menu", ["Cadastrar Novo Item", "Ver Projetos & Gerar PDF"])
 
 if menu == "Cadastrar Novo Item":
@@ -28,7 +28,6 @@ if menu == "Cadastrar Novo Item":
         dimensoes = st.text_input("Dimensões (Ex: 1.20 x 0.80m)")
         preco = st.number_input("Preço (R$)", min_value=0.0, format="%.2f")
         
-        # ATENÇÃO: accept_multiple_files=True permite selecionar várias fotos de uma vez!
         fotos_files = st.file_uploader("Fotos do Produto", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
         
         submitted = st.form_submit_button("Salvar no Sistema")
@@ -38,7 +37,6 @@ if menu == "Cadastrar Novo Item":
                 st.error("Preencha pelo menos o nome do projeto e o ambiente!")
             else:
                 if not fotos_files:
-                    # Salva sem foto caso nenhuma tenha sido selecionada
                     dados = {
                         "projeto": projeto, "ambiente": ambiente, 
                         "fornecedor": fornecedor, "dimensoes": dimensoes, 
@@ -47,14 +45,12 @@ if menu == "Cadastrar Novo Item":
                     supabase.table("projetos_moveis").insert(dados).execute()
                     st.success("Item cadastrado com sucesso (sem foto)!")
                 else:
-                    # Loop para salvar cada foto selecionada como um item separado no banco
                     sucesso = True
                     for foto_file in fotos_files:
                         try:
                             file_bytes = foto_file.read()
                             file_name = f"{projeto}_{foto_file.name}".replace(" ", "_")
                             
-                            # Upload para o Storage do Supabase
                             supabase.storage.from_("fotos-moveis").upload(
                                 file=file_bytes,
                                 path=file_name,
@@ -63,7 +59,6 @@ if menu == "Cadastrar Novo Item":
                             
                             public_url = supabase.storage.from_("fotos-moveis").get_public_url(file_name)
                             
-                            # Salva cada imagem como uma linha no banco vinculada ao projeto
                             dados = {
                                 "projeto": projeto,
                                 "ambiente": ambiente,
@@ -107,29 +102,58 @@ elif menu == "Ver Projetos & Gerar PDF":
                     st.write(f"**Dimensões:** {item.get('dimensoes')}")
                     st.write(f"**Preço:** R$ {item.get('preco')}")
 
-            # Botão para gerar o PDF Comercial com todas as fotos
+            # Botão para gerar o PDF Comercial Profissional
             st.markdown("### Gerar Proposta Comercial")
-            if st.button("📄 Criar PDF com Fotos"):
+            if st.button("📄 Criar PDF Profissional"):
                 buffer = io.BytesIO()
                 p = canvas.Canvas(buffer, pagesize=A4)
                 width, height = A4
 
-                p.setFont("Helvetica-Bold", 16)
-                p.drawString(50, height - 40, "Proposta Comercial - Móveis Planejados")
-                p.setFont("Helvetica", 12)
-                p.drawString(50, height - 60, f"Projeto: {projeto_selecionado}")
+                # Cabeçalho Elegante
+                p.setFillColor(colors.HexColor("#1e293b"))
+                p.rect(0, height - 70, width, 70, fill=1, stroke=0)
                 
-                y = height - 100
+                p.setFillColor(colors.white)
+                p.setFont("Helvetica-Bold", 16)
+                p.drawString(40, height - 30, "Senhora Lavanderia & Móveis")
+                p.setFont("Helvetica", 11)
+                p.drawString(40, height - 50, f"Proposta Comercial - Projeto: {projeto_selecionado}")
+
+                y = height - 110
+                total_geral = 0
+
                 for item in itens:
-                    if y < 180:
+                    # Calcula o total geral
+                    try:
+                        total_geral += float(item.get('preco') or 0)
+                    except:
+                        pass
+
+                    # Verifica se precisa de nova página
+                    if y < 220:
                         p.showPage()
-                        y = height - 50
+                        y = height - 60
 
-                    p.setFont("Helvetica-Bold", 11)
-                    p.drawString(50, y, f"Ambiente: {item.get('ambiente')} | Fornecedor: {item.get('fornecedor')}")
+                    # Caixa de fundo sutil para cada item
+                    p.setFillColor(colors.HexColor("#f8fafc"))
+                    p.setStrokeColor(colors.HexColor("#e2e8f0"))
+                    p.roundRect(40, y - 140, width - 80, 130, 6, fill=1, stroke=1)
+
+                    # Textos do item
+                    p.setFillColor(colors.HexColor("#0f172a"))
+                    p.setFont("Helvetica-Bold", 12)
+                    p.drawString(160, y - 25, f"Ambiente: {item.get('ambiente')}")
+                    
                     p.setFont("Helvetica", 10)
-                    p.drawString(50, y - 15, f"Dimensões: {item.get('dimensoes')} | Preço: R$ {item.get('preco')}")
+                    p.setFillColor(colors.HexColor("#334155"))
+                    p.drawString(160, y - 45, f"Fornecedor: {item.get('fornecedor') or 'N/D'}")
+                    p.drawString(160, y - 65, f"Dimensões: {item.get('dimensoes') or 'N/D'}")
+                    
+                    p.setFont("Helvetica-Bold", 11)
+                    p.setFillColor(colors.HexColor("#16a34a")) # Verde para destaque do preço
+                    p.drawString(160, y - 90, f"Preço: R$ {item.get('preco') or '0.00'}")
 
+                    # Inserção da Foto padronizada dentro da caixa
                     foto_url = item.get('foto_url')
                     if foto_url:
                         try:
@@ -140,7 +164,8 @@ elif menu == "Ver Projetos & Gerar PDF":
                                 img_path = f"temp_{item.get('id')}.jpg"
                                 img.save(img_path)
                                 
-                                p.drawImage(img_path, 50, y - 130, width=100, height=100, preserveAspectRatio=True)
+                                # Desenha a foto redimensionada e alinhada à esquerda da caixa
+                                p.drawImage(img_path, 55, y - 125, width=90, height=100, preserveAspectRatio=True, anchor='c')
                                 
                                 if os.path.exists(img_path):
                                     os.remove(img_path)
@@ -149,11 +174,22 @@ elif menu == "Ver Projetos & Gerar PDF":
 
                     y -= 150
 
+                # Rodapé com Valor Total
+                if y < 80:
+                    p.showPage()
+                    y = height - 60
+
+                p.setFillColor(colors.HexColor("#1e293b"))
+                p.roundRect(40, y - 40, width - 80, 35, 4, fill=1, stroke=0)
+                p.setFillColor(colors.white)
+                p.setFont("Helvetica-Bold", 12)
+                p.drawString(55, y - 22, f"VALOR TOTAL DO PROJETO: R$ {total_geral:.2f}")
+
                 p.save()
                 buffer.seek(0)
                 
                 st.download_button(
-                    label="📥 Baixar PDF Completo com Fotos",
+                    label="📥 Baixar PDF Profissional",
                     data=buffer,
                     file_name=f"Proposta_{projeto_selecionado.replace(' ', '_')}.pdf",
                     mime="application/pdf"
