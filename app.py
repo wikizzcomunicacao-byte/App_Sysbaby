@@ -8,26 +8,8 @@ import requests
 from PIL import Image as PILImage
 import os
 
-# --- CONFIGURAÇÃO DA PÁGINA E CSS DEFINITIVO PARA FIXAR A BARRA LATERAL ---
+# --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Sys Baby Kids - Móveis", layout="wide")
-
-st.markdown(
-    """
-    <style>
-        /* Oculta e desativa totalmente o controle de recolher a barra lateral */
-        [data-testid="collapsedControl"] {
-            display: none !important;
-            visibility: hidden !important;
-            pointer-events: none !important;
-        }
-        /* Força a barra lateral a permanecer expandida e fixa */
-        section[data-testid="stSidebar"] {
-            width: 280px !important;
-        }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
 
 # --- CONEXÃO SEGURA COM O SUPABASE ---
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -36,10 +18,12 @@ SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 st.title("🗄️ Sistema de Móveis - Sys Baby Kids")
+st.markdown("---")
 
-menu = st.sidebar.selectbox("Menu", ["Cadastrar Novo Item", "Ver Projetos & Gerar PDF"])
+# Menu em formato de abas (blocos) direto na página principal
+aba1, aba2 = st.tabs(["📦 Cadastrar Novo Item", "📊 Ver Projetos & Gerar PDF"])
 
-if menu == "Cadastrar Novo Item":
+with aba1:
     st.header("Cadastrar Peças / Móveis")
     
     with st.form("form_cadastro", clear_on_submit=True):
@@ -96,7 +80,7 @@ if menu == "Cadastrar Novo Item":
                     if sucesso:
                         st.success(f"{len(fotos_files)} foto(s) cadastrada(s) com sucesso!")
 
-elif menu == "Ver Projetos & Gerar PDF":
+with aba2:
     st.header("Projetos Cadastrados")
     
     try:
