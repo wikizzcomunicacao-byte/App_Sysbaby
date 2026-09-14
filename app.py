@@ -9,7 +9,7 @@ app = Flask(__name__)
 
 # Configurações do seu Supabase (Substitua pelas suas chaves reais)
 SUPABASE_URL = "SUA_SUPABASE_URL_AQUI"
-SUPABASE_KEY = " SUA_SUPABASE_ANON_KEY_AQUI"
+SUPABASE_KEY = "SUA_SUPABASE_ANON_KEY_AQUI"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 @app.route('/')
@@ -76,7 +76,7 @@ def gerar_pdf(projeto_nome):
 
     # Cabeçalho do PDF
     p.setFont("Helvetica-Bold", 16)
-    p.drawString(50, height - 50, f"Senhora Lavanderia & Móveis - Proposta")
+    p.drawString(50, height - 50, f"Móveis Planejados - Proposta")
     p.setFont("Helvetica", 12)
     p.drawString(50, height - 70, f"Projeto: {projeto_nome}")
     
@@ -97,8 +97,7 @@ def gerar_pdf(projeto_nome):
     buffer.seek(0)
 
     return send_file(buffer, as_attachment=True, download_name=f"Proposta_{projeto_nome}.pdf", mimetype='application/pdf')
-    if __name__ == '__main__':
-    app.run(debug=True, port=5000)
 
+# Bloco para rodar localmente no computador (a Vercel ignora isso automaticamente)
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
