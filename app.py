@@ -8,6 +8,8 @@ import requests
 from PIL import Image as PILImage
 import os
 import urllib.parse
+import unicodedata
+import re
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Sys Baby Kids - Sistema de Móveis", layout="wide", page_icon="🗄️")
@@ -58,22 +60,27 @@ with st.sidebar:
 abas_nomes = ["📊 Ver Projetos & Gerar PDF", "📦 Cadastrar Novo Item (Requer Senha)"]
 aba_pdf, aba_cad = st.tabs(abas_nomes)
 
-# --- FUNÇÃO REFORÇADA PARA COMPRESSÃO DE IMAGEM ---
+# --- FUNÇÃO PARA REMOVER ACENTOS E CARACTERES ESPECIAIS DO NOME DO ARQUIVO ---
+def limpar_nome_arquivo(texto):
+    # Remove acentos (ex: ç -> c, é -> e)
+    nfkd = unicodedata.normalize('NFKD', texto)
+    texto_sem_acento = "".join([c for c in nfkd if not unicodedata.combining(c)])
+    # Substitui espaços e caracteres especiais por sublinhado
+    texto_limpo = re.sub(r'[^a-zA-Z0-9_-]', '_', texto_sem_acento)
+    return texto_limpo
+
+# --- FUNÇÃO PARA COMPRESSÃO DE IMAGEM ---
 def otimizar_imagem(imagem_file):
-    # Abre a imagem original enviada pelo uploader
     img = PILImage.open(imagem_file)
     
-    # Converte para RGB se tiver transparência ou formato incompatível com JPEG
     if img.mode in ("RGBA", "P"):
         img = img.convert("RGB")
         
-    # Redimensiona agressivamente para garantir que a largura máxima seja de 900 pixels
     max_largura = 900
     if img.width > max_largura:
         nova_altura = int((max_largura / img.width) * img.height)
         img = img.resize((max_largura, nova_altura), PILImage.Resampling.LANCZOS)
         
-    # Salva no buffer com qualidade 70% (comprime bastante o arquivo, mantendo excelente nitidez para catálogo)
     buffer_out = io.BytesIO()
     img.save(buffer_out, format="JPEG", quality=70, optimize=True)
     buffer_out.seek(0)
@@ -117,12 +124,13 @@ with aba_cad:
                         sucesso = True
                         for foto_file in fotos_files:
                             try:
-                                # Chama a função que compacta a imagem de verdade
                                 foto_otimizada = otimizar_imagem(foto_file)
                                 file_bytes = foto_otimizada.read()
                                 
-                                nome_limpo = os.path.splitext(foto_file.name)[0]
-                                file_name = f"{projeto}_{nome_limpo}.jpg".replace(" ", "_")
+                                # Limpa o nome do projeto e do arquivo para evitar erros no Supabase
+                                projeto_limpo = limpar_nome_arquivo(projeto)
+                                nome_original_limpo = limpar_nome_arquivo(os.path.splitext(foto_file.name)[0])
+                                file_name = f"{projeto_limpo}_{nome_original_limpo}.jpg"
                                 
                                 supabase.storage.from_("fotos-moveis").upload(
                                     file=file_bytes,
@@ -146,7 +154,7 @@ with aba_cad:
                                 st.warning(f"Erro ao enviar a foto {foto_file.name}: {e}")
                         
                         if sucesso:
-                            st.success(f"{len(fotos_files)} foto(s) compactada(s) com sucesso!")
+                            st.success(f"{len(fotos_files)} foto(s) compactada(s) e cadastrada(s) com sucesso!")
 
 with aba_pdf:
     st.header("Gerenciamento de Projetos e Propostas")
@@ -384,7 +392,7 @@ with aba_pdf:
                     st.session_state["total_geral"] = total_geral_calc
                     st.session_state["projeto_atual"] = projeto_selecionado
 
-            if st.session_state.get("pdf_gerado") and st.session_state.get("projeto_atual") == projeto_selecionado:
+            if st.session_state.get("pdf_gerado") and st.session_state.get("projeto_atual"] == projeto_selecionado:
                 st.success("PDF gerado com sucesso!")
                 
                 st.download_button(
