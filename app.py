@@ -109,8 +109,12 @@ with aba_cad:
                 if not ambiente or preco <= 0.0:
                     st.error("Preencha obrigatoriamente o Nome do Item e um Preço válido!")
                 else:
+                    # Valor padrão para satisfazer a coluna antiga "projeto" do Supabase
+                    projeto_padrao = "Geral"
+                    
                     if not fotos_files:
                         dados = {
+                            "projeto": projeto_padrao,
                             "ambiente": ambiente, 
                             "fornecedor": fornecedor, 
                             "dimensoes": dimensoes, 
@@ -138,6 +142,7 @@ with aba_cad:
                                 public_url = supabase.storage.from_("fotos-moveis").get_public_url(file_name)
                                 
                                 dados = {
+                                    "projeto": projeto_padrao,
                                     "ambiente": ambiente,
                                     "fornecedor": fornecedor,
                                     "dimensoes": dimensoes,
