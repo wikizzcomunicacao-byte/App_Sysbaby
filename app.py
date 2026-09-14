@@ -8,19 +8,21 @@ import requests
 from PIL import Image as PILImage
 import os
 
-# --- CONFIGURAÇÃO DA PÁGINA E CSS PARA FIXAR A BARRA LATERAL ---
+# --- CONFIGURAÇÃO DA PÁGINA E CSS DEFINITIVO PARA FIXAR A BARRA LATERAL ---
 st.set_page_config(page_title="Sys Baby Kids - Móveis", layout="wide")
 
 st.markdown(
     """
     <style>
-        /* Oculta o botão de recolher a barra lateral de forma definitiva */
+        /* Oculta e desativa totalmente o controle de recolher a barra lateral */
         [data-testid="collapsedControl"] {
             display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
         }
-        /* Remove qualquer botão de fechar no topo do sidebar */
-        button[kind="tertiary"] {
-            display: none !important;
+        /* Força a barra lateral a permanecer expandida e fixa */
+        section[data-testid="stSidebar"] {
+            width: 280px !important;
         }
     </style>
     """,
