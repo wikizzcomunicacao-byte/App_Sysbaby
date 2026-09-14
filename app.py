@@ -41,26 +41,40 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 st.title("🗄️ Sys Baby Kids — Propostas e Catálogo")
 st.markdown("---")
 
-# Defina a senha para liberar as funções administrativas (Editar e Excluir)
 SENHA_ADMIN = "sysbaby2026"
 
-# Sidebar discreta apenas para digitar a senha de administrador quando necessário
+# Sidebar discreta para a senha de administrador
 with st.sidebar:
     st.subheader("🔐 Área Administrativa")
     st.write("Digite a senha apenas se precisar cadastrar, editar ou excluir itens.")
     senha_input = st.text_input("Senha de Administrador:", type="password")
     
-    # Verifica se a senha está correta
     admin_autenticado = (senha_input == SENHA_ADMIN)
     if admin_autenticado:
-        st.success("🔓 Modo Admin Ativado (Edição/Exclusão Liberadas)")
+        st.success("🔓 Modo Admin Ativado")
     elif senha_input:
         st.error("❌ Senha incorreta.")
 
-# Menu em formato de abas limpo e moderno
-# Se não for admin, a aba de cadastro fica restrita ou avisa sobre a senha
 abas_nomes = ["📊 Ver Projetos & Gerar PDF", "📦 Cadastrar Novo Item (Requer Senha)"]
 aba_pdf, aba_cad = st.tabs(abas_nomes)
+
+# --- FUNÇÃO PARA OTIMIZAR E REDUZIR O TAMANHO DA FOTO ---
+def otimizar_imagem(imagem_file, max_largura=1200, qualidade=80):
+    img = PILImage.open(imagem_file)
+    
+    # Converte para RGB caso esteja em RGBA (PNG transparente) para evitar erro ao salvar em JPEG
+    if img.mode in ("RGBA", "P"):
+        img = img.convert("RGB")
+        
+    # Redimensiona mantendo a proporção se a largura for maior que o limite
+    if img.width > max_largura:
+        nova_altura = int((max_largura / img.width) * img.height)
+        img = img.resize((max_largura, nova_altura), PILImage.Resampling.LANCZOS)
+        
+    buffer_out = io.BytesIO()
+    img.save(buffer_out, format="JPEG", quality=qualidade)
+    buffer_out.seek(0)
+    return buffer_out
 
 with aba_cad:
     st.header("Cadastrar Peças / Móveis")
@@ -100,13 +114,17 @@ with aba_cad:
                         sucesso = True
                         for foto_file in fotos_files:
                             try:
-                                file_bytes = foto_file.read()
-                                file_name = f"{projeto}_{foto_file.name}".replace(" ", "_")
+                                # Otimiza e reduz o tamanho da foto antes de enviar
+                                foto_otimizada = otimizar_imagem(foto_file)
+                                file_bytes = foto_otimizada.read()
+                                
+                                nome_limpo = os.path.splitext(foto_file.name)[0]
+                                file_name = f"{projeto}_{nome_limpo}.jpg".replace(" ", "_")
                                 
                                 supabase.storage.from_("fotos-moveis").upload(
                                     file=file_bytes,
                                     path=file_name,
-                                    file_options={"content-type": foto_file.type}
+                                    file_options={"content-type": "image/jpeg", "upsert": "true"}
                                 )
                                 
                                 public_url = supabase.storage.from_("fotos-moveis").get_public_url(file_name)
@@ -125,7 +143,7 @@ with aba_cad:
                                 st.warning(f"Erro ao enviar a foto {foto_file.name}: {e}")
                         
                         if sucesso:
-                            st.success(f"{len(fotos_files)} foto(s) cadastrada(s) com sucesso!")
+                            st.success(f"{len(fotos_files)} foto(s) otimizada(s) e cadastrada(s) com sucesso!")
 
 with aba_pdf:
     st.header("Gerenciamento de Projetos e Propostas")
@@ -156,7 +174,6 @@ with aba_pdf:
                 with st.container(border=True):
                     marcado = st.checkbox(f"Incluir na proposta: **{item.get('ambiente')}**", value=True, key=f"item_{item_id}")
                     
-                    # Ajusta as colunas dependendo se o usuário é admin ou não
                     if admin_autenticado:
                         col_img, col_info, col_acoes = st.columns([1, 2.5, 1])
                     else:
@@ -174,7 +191,6 @@ with aba_pdf:
                         st.write(f"**Dimensões:** {item.get('dimensoes') or 'Não informado'}")
                         st.markdown(f"<span style='color: #2C5E3B; font-weight: bold; font-size: 1.1em;'>R$ {float(item.get('preco') or 0):,.2f}</span>", unsafe_allow_html=True)
                     
-                    # Se for admin, mostra os botões de ação na terceira coluna
                     if admin_autenticado:
                         with col_acoes:
                             st.write("**Ações Admin:**")
@@ -189,7 +205,6 @@ with aba_pdf:
                                 except Exception as e:
                                     st.error(f"Erro ao excluir: {e}")
 
-                # Bloco de edição restrito a administradores
                 if admin_autenticado and st.session_state.get(f"edit_mode_{item_id}", False):
                     with st.form(f"form_edit_{item_id}"):
                         st.markdown(f"**Editando: {item.get('ambiente')}**")
