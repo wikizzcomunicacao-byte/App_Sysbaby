@@ -97,6 +97,8 @@ def gerar_pdf(projeto_nome):
     buffer.seek(0)
 
     return send_file(buffer, as_attachment=True, download_name=f"Proposta_{projeto_nome}.pdf", mimetype='application/pdf')
+    if __name__ == '__main__':
+    app.run(debug=True, port=5000)
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
