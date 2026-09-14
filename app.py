@@ -18,8 +18,26 @@ SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# --- TELA DE LOGIN SIMPLES ---
 st.title("🗄️ Sistema de Móveis - Sys Baby Kids")
 st.markdown("---")
+
+# Defina aqui a senha de acesso desejada
+SENHA_MESTRE = "sysbaby2026"
+
+# Cria um campo de senha na tela inicial
+senha_digitada = st.text_input("🔒 Digite a senha de acesso ao sistema:", type="password")
+
+if not senha_digitada:
+    st.info("Por favor, digite a senha para acessar o painel de controle.")
+    st.stop() # Interrompe a execução para não mostrar o restante do sistema sem a senha
+
+if senha_digitada != SENHA_MESTRE:
+    st.error("❌ Senha incorreta! Acesso negado.")
+    st.stop() # Interrompe a execução caso a senha esteja errada
+
+# --- SISTEMA PRINCIPAL (Liberado apenas após a senha correta) ---
+st.success("✅ Acesso autorizado!")
 
 # Menu em formato de abas direto na página principal
 aba1, aba2 = st.tabs(["📦 Cadastrar Novo Item", "📊 Ver Projetos & Gerar PDF"])
@@ -106,7 +124,6 @@ with aba2:
                 st.markdown("---")
                 item_id = item.get("id")
                 
-                # Checkbox de inclusão no PDF
                 marcado = st.checkbox(f"Incluir na proposta: **{item.get('ambiente')}** (R$ {item.get('preco')})", value=True, key=f"item_{item_id}")
                 
                 col1, col2, col3 = st.columns([1, 2, 1])
@@ -122,9 +139,7 @@ with aba2:
                 
                 with col3:
                     st.write("**Ações:**")
-                    # Botão para abrir o modo de edição deste item específico
                     editar_click = st.button("✏️ Editar", key=f"edit_btn_{item_id}")
-                    # Botão para excluir o item do banco de dados
                     excluir_click = st.button("🗑️ Excluir", key=f"del_btn_{item_id}")
                     
                     if excluir_click:
@@ -135,7 +150,6 @@ with aba2:
                         except Exception as e:
                             st.error(f"Erro ao excluir: {e}")
 
-                # Bloco de Edição Expandido se o botão Editar for acionado
                 if st.session_state.get(f"edit_mode_{item_id}", False):
                     with st.form(f"form_edit_{item_id}"):
                         st.markdown(f"**Editando: {item.get('ambiente')}**")
@@ -240,7 +254,6 @@ with aba2:
                         p.setLineWidth(1)
                         p.line(40, height - 130, width - 40, height - 130)
 
-                        # Moldura da foto
                         p.setFillColor(colors.white)
                         p.setStrokeColor(colors.HexColor("#D1D5DB"))
                         p.roundRect(35, 120, width - 70, height - 280, 8, fill=1, stroke=1)
@@ -312,7 +325,6 @@ with aba2:
                     st.session_state["total_geral"] = total_geral_calc
                     st.session_state["projeto_atual"] = projeto_selecionado
 
-            # Exibe os botões de download e WhatsApp se o PDF já foi gerado na sessão
             if st.session_state.get("pdf_gerado") and st.session_state.get("projeto_atual") == projeto_selecionado:
                 st.success("PDF gerado com sucesso!")
                 
