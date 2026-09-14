@@ -37,90 +37,98 @@ SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# --- TELA DE LOGIN SIMPLES ---
-st.title("🗄️ Sys Baby Kids — Painel de Gestão e Propostas")
+# --- TÍTULO PRINCIPAL ---
+st.title("🗄️ Sys Baby Kids — Propostas e Catálogo")
 st.markdown("---")
 
-SENHA_MESTRE = "sysbaby2026"
+# Defina a senha para liberar as funções administrativas (Editar e Excluir)
+SENHA_ADMIN = "sysbaby2026"
 
-senha_digitada = st.text_input("🔒 Digite a senha de acesso ao sistema:", type="password")
-
-if not senha_digitada:
-    st.info("Por favor, digite a senha para acessar o painel de controle.")
-    st.stop()
-
-if senha_digitada != SENHA_MESTRE:
-    st.error("❌ Senha incorreta! Acesso negado.")
-    st.stop()
-
-st.success("✅ Acesso autorizado com sucesso!")
+# Sidebar discreta apenas para digitar a senha de administrador quando necessário
+with st.sidebar:
+    st.subheader("🔐 Área Administrativa")
+    st.write("Digite a senha apenas se precisar cadastrar, editar ou excluir itens.")
+    senha_input = st.text_input("Senha de Administrador:", type="password")
+    
+    # Verifica se a senha está correta
+    admin_autenticado = (senha_input == SENHA_ADMIN)
+    if admin_autenticado:
+        st.success("🔓 Modo Admin Ativado (Edição/Exclusão Liberadas)")
+    elif senha_input:
+        st.error("❌ Senha incorreta.")
 
 # Menu em formato de abas limpo e moderno
-aba1, aba2 = st.tabs(["📦 Cadastrar Novo Item", "📊 Gerenciar Projetos & Propostas"])
+# Se não for admin, a aba de cadastro fica restrita ou avisa sobre a senha
+abas_nomes = ["📊 Ver Projetos & Gerar PDF", "📦 Cadastrar Novo Item (Requer Senha)"]
+aba_pdf, aba_cad = st.tabs(abas_nomes)
 
-with aba1:
+with aba_cad:
     st.header("Cadastrar Peças / Móveis")
-    st.markdown("Preencha os dados abaixo para adicionar um novo item ao catálogo do projeto.")
     
-    with st.form("form_cadastro", clear_on_submit=True):
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            projeto = st.text_input("Nome do Projeto / Cliente (Ex: Quarto da Mini)")
-            fornecedor = st.text_input("Fornecedor")
-            preco = st.number_input("Preço (R$)", min_value=0.0, format="%.2f")
-        with col_f2:
-            ambiente = st.text_input("Ambiente / Móvel (Ex: Berço Safari)")
-            dimensoes = st.text_input("Dimensões (Ex: 1.20 x 0.80m)")
+    if not admin_autenticado:
+        st.warning("🔒 O cadastro de novos itens é restrito. Digite a senha correta na barra lateral à esquerda para desbloquear.")
+    else:
+        st.markdown("Preencha os dados abaixo para adicionar um novo item ao catálogo do projeto.")
         
-        fotos_files = st.file_uploader("Fotos do Produto", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
-        
-        submitted = st.form_submit_button("💾 Salvar no Sistema", use_container_width=True)
-        
-        if submitted:
-            if not projeto or not ambiente:
-                st.error("Preencha pelo menos o nome do projeto e o ambiente!")
-            else:
-                if not fotos_files:
-                    dados = {
-                        "projeto": projeto, "ambiente": ambiente, 
-                        "fornecedor": fornecedor, "dimensoes": dimensoes, 
-                        "preco": preco, "foto_url": ""
-                    }
-                    supabase.table("projetos_moveis").insert(dados).execute()
-                    st.success("Item cadastrado com sucesso (sem foto)!")
+        with st.form("form_cadastro", clear_on_submit=True):
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                projeto = st.text_input("Nome do Projeto / Cliente (Ex: Quarto da Mini)")
+                fornecedor = st.text_input("Fornecedor")
+                preco = st.number_input("Preço (R$)", min_value=0.0, format="%.2f")
+            with col_f2:
+                ambiente = st.text_input("Ambiente / Móvel (Ex: Berço Safari)")
+                dimensoes = st.text_input("Dimensões (Ex: 1.20 x 0.80m)")
+            
+            fotos_files = st.file_uploader("Fotos do Produto", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+            
+            submitted = st.form_submit_button("💾 Salvar no Sistema", use_container_width=True)
+            
+            if submitted:
+                if not projeto or not ambiente:
+                    st.error("Preencha pelo menos o nome do projeto e o ambiente!")
                 else:
-                    sucesso = True
-                    for foto_file in fotos_files:
-                        try:
-                            file_bytes = foto_file.read()
-                            file_name = f"{projeto}_{foto_file.name}".replace(" ", "_")
-                            
-                            supabase.storage.from_("fotos-moveis").upload(
-                                file=file_bytes,
-                                path=file_name,
-                                file_options={"content-type": foto_file.type}
-                            )
-                            
-                            public_url = supabase.storage.from_("fotos-moveis").get_public_url(file_name)
-                            
-                            dados = {
-                                "projeto": projeto,
-                                "ambiente": ambiente,
-                                "fornecedor": fornecedor,
-                                "dimensoes": dimensoes,
-                                "preco": preco,
-                                "foto_url": public_url
-                            }
-                            supabase.table("projetos_moveis").insert(dados).execute()
-                        except Exception as e:
-                            sucesso = False
-                            st.warning(f"Erro ao enviar a foto {foto_file.name}: {e}")
-                    
-                    if sucesso:
-                        st.success(f"{len(fotos_files)} foto(s) cadastrada(s) com sucesso!")
+                    if not fotos_files:
+                        dados = {
+                            "projeto": projeto, "ambiente": ambiente, 
+                            "fornecedor": fornecedor, "dimensoes": dimensoes, 
+                            "preco": preco, "foto_url": ""
+                        }
+                        supabase.table("projetos_moveis").insert(dados).execute()
+                        st.success("Item cadastrado com sucesso (sem foto)!")
+                    else:
+                        sucesso = True
+                        for foto_file in fotos_files:
+                            try:
+                                file_bytes = foto_file.read()
+                                file_name = f"{projeto}_{foto_file.name}".replace(" ", "_")
+                                
+                                supabase.storage.from_("fotos-moveis").upload(
+                                    file=file_bytes,
+                                    path=file_name,
+                                    file_options={"content-type": foto_file.type}
+                                )
+                                
+                                public_url = supabase.storage.from_("fotos-moveis").get_public_url(file_name)
+                                
+                                dados = {
+                                    "projeto": projeto,
+                                    "ambiente": ambiente,
+                                    "fornecedor": fornecedor,
+                                    "dimensoes": dimensoes,
+                                    "preco": preco,
+                                    "foto_url": public_url
+                                }
+                                supabase.table("projetos_moveis").insert(dados).execute()
+                            except Exception as e:
+                                sucesso = False
+                                st.warning(f"Erro ao enviar a foto {foto_file.name}: {e}")
+                        
+                        if sucesso:
+                            st.success(f"{len(fotos_files)} foto(s) cadastrada(s) com sucesso!")
 
-with aba2:
-    st.header("Gerenciamento de Projetos")
+with aba_pdf:
+    st.header("Gerenciamento de Projetos e Propostas")
     
     try:
         response = supabase.table("projetos_moveis").select("projeto").execute()
@@ -145,11 +153,15 @@ with aba2:
             for item in itens:
                 item_id = item.get("id")
                 
-                # Exibição em formato de Cartão/Card Limpo
                 with st.container(border=True):
                     marcado = st.checkbox(f"Incluir na proposta: **{item.get('ambiente')}**", value=True, key=f"item_{item_id}")
                     
-                    col_img, col_info, col_acoes = st.columns([1, 2.5, 1])
+                    # Ajusta as colunas dependendo se o usuário é admin ou não
+                    if admin_autenticado:
+                        col_img, col_info, col_acoes = st.columns([1, 2.5, 1])
+                    else:
+                        col_img, col_info = st.columns([1, 3])
+                    
                     with col_img:
                         if item.get("foto_url"):
                             st.image(item["foto_url"], width=130)
@@ -162,21 +174,23 @@ with aba2:
                         st.write(f"**Dimensões:** {item.get('dimensoes') or 'Não informado'}")
                         st.markdown(f"<span style='color: #2C5E3B; font-weight: bold; font-size: 1.1em;'>R$ {float(item.get('preco') or 0):,.2f}</span>", unsafe_allow_html=True)
                     
-                    with col_acoes:
-                        st.write("**Ações:**")
-                        editar_click = st.button("✏️ Editar", key=f"edit_btn_{item_id}", use_container_width=True)
-                        excluir_click = st.button("🗑️ Excluir", key=f"del_btn_{item_id}", use_container_width=True)
-                        
-                        if excluir_click:
-                            try:
-                                supabase.table("projetos_moveis").delete().eq("id", item_id).execute()
-                                st.success("Item excluído com sucesso!")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Erro ao excluir: {e}")
+                    # Se for admin, mostra os botões de ação na terceira coluna
+                    if admin_autenticado:
+                        with col_acoes:
+                            st.write("**Ações Admin:**")
+                            editar_click = st.button("✏️ Editar", key=f"edit_btn_{item_id}", use_container_width=True)
+                            excluir_click = st.button("🗑️ Excluir", key=f"del_btn_{item_id}", use_container_width=True)
+                            
+                            if excluir_click:
+                                try:
+                                    supabase.table("projetos_moveis").delete().eq("id", item_id).execute()
+                                    st.success("Item excluído com sucesso!")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Erro ao excluir: {e}")
 
-                # Bloco de edição se ativado
-                if st.session_state.get(f"edit_mode_{item_id}", False):
+                # Bloco de edição restrito a administradores
+                if admin_autenticado and st.session_state.get(f"edit_mode_{item_id}", False):
                     with st.form(f"form_edit_{item_id}"):
                         st.markdown(f"**Editando: {item.get('ambiente')}**")
                         novo_ambiente = st.text_input("Ambiente / Móvel", value=item.get("ambiente"))
@@ -205,7 +219,7 @@ with aba2:
                             st.session_state[f"edit_mode_{item_id}"] = False
                             st.rerun()
 
-                if editar_click:
+                if admin_autenticado and locals().get('editar_click', False):
                     st.session_state[f"edit_mode_{item_id}"] = True
                     st.rerun()
                 
