@@ -14,7 +14,7 @@ SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-st.title("🗄️ Sistema de Móveis - Sis Baby Kids")
+st.title("🗄️ Sistema de Móveis Planejados - Senhora Lavanderia")
 
 menu = st.sidebar.selectbox("Menu", ["Cadastrar Novo Item", "Ver Projetos & Gerar PDF"])
 
@@ -102,82 +102,81 @@ elif menu == "Ver Projetos & Gerar PDF":
                     st.write(f"**Dimensões:** {item.get('dimensoes')}")
                     st.write(f"**Preço:** R$ {item.get('preco')}")
 
-            # Botão para gerar o PDF Personalizado Sis Baby Kids
-            st.markdown("### Gerar Proposta Comercial Personalizada")
-            if st.button("📄 Criar PDF Estilo Sis Baby Kids"):
+            # Botão para gerar o PDF Estilo Luxo / Catálogo
+            st.markdown("### Gerar Proposta Comercial de Luxo")
+            if st.button("📄 Criar PDF Estilo Luxo"):
                 buffer = io.BytesIO()
                 p = canvas.Canvas(buffer, pagesize=A4)
                 width, height = A4
 
-                # Cores oficiais da identidade visual Sis Baby Kids
-                cor_marrom_escuro = colors.HexColor("#5A4A42")
-                cor_bege_fundo = colors.HexColor("#F9F6F0")
-                cor_detalhe = colors.HexColor("#A89F91")
-                cor_verde_preco = colors.HexColor("#2C5E3B")
+                # Cores sofisticadas do tema Luxo
+                cor_fundo_topo = colors.HexColor("#111827") # Cinza chumbo escuro / quase preto
+                cor_destaque = colors.HexColor("#D97706")   # Tom dourado / âmbar elegante
+                cor_texto_cinza = colors.HexColor("#4B5563")
 
-                # Verifica se o arquivo 'logo.png' existe na pasta do projeto
-                logo_path = "logo.png"
-                tem_logo = os.path.exists(logo_path)
-
-                # --- CAPA DO CATÁLOGO ---
-                p.setFillColor(cor_bege_fundo)
+                # --- CAPA / PÁGINA DE APRESENTAÇÃO ---
+                p.setFillColor(cor_fundo_topo)
                 p.rect(0, 0, width, height, fill=1, stroke=0)
 
-                if tem_logo:
-                    p.drawImage(logo_path, width / 2 - 100, height / 2 + 60, width=200, height=90, preserveAspectRatio=True, anchor='c')
-
-                p.setFillColor(cor_marrom_escuro)
-                p.setFont("Helvetica-Bold", 24)
-                p.drawCentredString(width / 2, height / 2 - 10, "PROPOSTA EXCLUSIVA")
+                p.setFillColor(colors.white)
+                p.setFont("Helvetica-Bold", 28)
+                p.drawCentredString(width / 2, height / 2 + 40, "PROPOSTA EXCLUSIVA")
                 
-                p.setFont("Helvetica", 12)
-                p.setFillColor(cor_detalhe)
-                p.drawCentredString(width / 2, height / 2 - 40, f"Cliente / Projeto: {projeto_selecionado}")
+                p.setFillColor(cor_destaque)
+                p.setFont("Helvetica", 14)
+                p.drawCentredString(width / 2, height / 2, "MÓVEIS PLANEJADOS & AMBIENTES")
 
-                p.showPage() # Vai para as páginas de produtos (1 móvel por página)
+                p.setFillColor(colors.HexColor("#9CA3AF"))
+                p.setFont("Helvetica", 12)
+                p.drawCentredString(width / 2, height / 2 - 40, f"Cliente / Projeto: {projeto_selecionado}")
+                
+                p.showPage() # Fim da capa, passa para as páginas de catálogo de produtos
 
                 total_geral = 0
 
-                # --- PÁGINAS DE PRODUTOS (EXatamente 1 móvel por página) ---
+                # --- PÁGINAS DE VITRINE (UM MÓVEL POR PÁGINA) ---
                 for idx, item in enumerate(itens, 1):
                     try:
                         total_geral += float(item.get('preco') or 0)
                     except:
                         pass
 
-                    # Fundo suave padrão
-                    p.setFillColor(cor_bege_fundo)
+                    # Fundo levemente off-white para dar requinte
+                    p.setFillColor(colors.HexColor("#F9FAFB"))
                     p.rect(0, 0, width, height, fill=1, stroke=0)
 
-                    # Cabeçalho com a Logo Fixa
-                    if tem_logo:
-                        p.drawImage(logo_path, 40, height - 60, width=110, height=50, preserveAspectRatio=True, anchor='w')
-                    
+                    # Barra superior minimalista
+                    p.setFillColor(cor_fundo_topo)
+                    p.rect(0, height - 50, width, 50, fill=1, stroke=0)
+                    p.setFillColor(colors.white)
+                    p.setFont("Helvetica-Bold", 12)
+                    p.drawString(40, height - 30, "SENHORA LAVANDERIA & MÓVEIS")
                     p.setFont("Helvetica", 10)
-                    p.setFillColor(cor_detalhe)
-                    p.drawRightString(width - 40, height - 35, f"Ambiente {idx} de {len(itens)}")
+                    p.drawRightString(width - 40, height - 30, f"Peça {idx} de {len(itens)}")
 
-                    # Linha separadora discreta
-                    p.setStrokeColor(colors.HexColor("#E3DCD3"))
-                    p.setLineWidth(1)
-                    p.line(40, height - 70, width - 40, height - 70)
+                    # Título do Ambiente em destaque luxuoso
+                    p.setFillColor(cor_fundo_topo)
+                    p.setFont("Helvetica-Bold", 18)
+                    p.drawString(40, height - 90, f"{item.get('ambiente').upper()}")
 
-                    # Informações do Móvel
-                    p.setFillColor(cor_marrom_escuro)
-                    p.setFont("Helvetica-Bold", 16)
-                    p.drawString(40, height - 105, f"{item.get('ambiente')}")
+                    # Especificações Técnicas refinadas
+                    p.setFont("Helvetica", 11)
+                    p.setFillColor(cor_texto_cinza)
+                    p.drawString(40, height - 115, f"Fornecedor: {item.get('fornecedor') or 'Exclusivo'}")
+                    p.drawString(250, height - 115, f"Dimensões: {item.get('dimensoes') or 'Sob Medida'}")
 
-                    p.setFont("Helvetica", 10)
-                    p.setFillColor(cor_detalhe)
-                    p.drawString(40, height - 125, f"Fornecedor: {item.get('fornecedor') or 'Exclusivo'}")
-                    p.drawString(240, height - 125, f"Dimensões: {item.get('dimensoes') or 'Sob Medida'}")
-
+                    # Preço em destaque elegante
                     preco_val = item.get('preco') or 0.0
-                    p.setFont("Helvetica-Bold", 13)
-                    p.setFillColor(cor_verde_preco)
-                    p.drawRightString(width - 40, height - 125, f"R$ {float(preco_val):,.2f}")
+                    p.setFont("Helvetica-Bold", 14)
+                    p.setFillColor(cor_destaque)
+                    p.drawRightString(width - 40, height - 115, f"R$ {float(preco_val):,.2f}")
 
-                    # FOTO GRANDE EM DESTAQUE (Vitrine isolada)
+                    # Linha divisória fina e elegante
+                    p.setStrokeColor(colors.HexColor("#E5E7EB"))
+                    p.setLineWidth(1)
+                    p.line(40, height - 130, width - 40, height - 130)
+
+                    # FOTO GRANDE EM DESTAQUE TOTAL (Modo Vitrine de Luxo)
                     foto_url = item.get('foto_url')
                     if foto_url:
                         try:
@@ -185,59 +184,61 @@ elif menu == "Ver Projetos & Gerar PDF":
                             if response_img.status_code == 200:
                                 img_io = io.BytesIO(response_img.content)
                                 img = PILImage.open(img_io)
-                                img_temp_path = f"temp_prod_{item.get('id')}.jpg"
-                                img.save(img_temp_path)
+                                img_path = f"temp_{item.get('id')}.jpg"
+                                img.save(img_path)
                                 
-                                # Moldura elegante para a foto do móvel
+                                # Moldura sutil para a foto
                                 p.setFillColor(colors.white)
-                                p.setStrokeColor(colors.HexColor("#E3DCD3"))
-                                p.roundRect(35, 95, width - 70, height - 250, 8, fill=1, stroke=1)
+                                p.setStrokeColor(colors.HexColor("#D1D5DB"))
+                                p.roundRect(35, 120, width - 70, height - 280, 8, fill=1, stroke=1)
                                 
-                                # Imagem centralizada e ampla
-                                p.drawImage(img_temp_path, 50, 110, width=width - 100, height=height - 280, preserveAspectRatio=True, anchor='c')
+                                # Imagem centralizada e gigante (Ocupando o centro nobre da página)
+                                p.drawImage(img_path, 50, 135, width=width - 100, height=height - 310, preserveAspectRatio=True, anchor='c')
                                 
-                                if os.path.exists(img_temp_path):
-                                    os.remove(img_temp_path)
+                                if os.path.exists(img_path):
+                                    os.remove(img_path)
                         except Exception as img_err:
-                            print(f"Erro ao inserir imagem: {img_err}")
+                            print(f"Erro ao inserir imagem no PDF: {img_err}")
+
+                    # Rodapé da página de especificação
+                    p.setFillColor(cor_texto_cinza)
+                    p.setFont("Helvetica", 9)
+                    p.drawCentredString(width / 2, 40, "Documento confidencial gerado para apresentação comercial.")
 
                     p.showPage()
 
-                # --- PÁGINA FINAL (RESUMO) ---
-                p.setFillColor(cor_bege_fundo)
+                # --- PÁGINA FINAL DE RESUMO / ENCERRAMENTO ---
+                p.setFillColor(cor_fundo_topo)
                 p.rect(0, 0, width, height, fill=1, stroke=0)
 
-                if tem_logo:
-                    p.drawImage(logo_path, width / 2 - 80, height / 2 + 100, width=160, height=70, preserveAspectRatio=True, anchor='c')
+                p.setFillColor(colors.white)
+                p.setFont("Helvetica-Bold", 22)
+                p.drawCentredString(width / 2, height / 2 + 60, "RESUMO DO INVESTIMENTO")
 
-                p.setFillColor(cor_marrom_escuro)
-                p.setFont("Helvetica-Bold", 20)
-                p.drawCentredString(width / 2, height / 2 + 20, "RESUMO DO INVESTIMENTO")
+                p.setFillColor(cor_destaque)
+                p.setFont("Helvetica", 14)
+                p.drawCentredString(width / 2, height / 2 + 15, f"Projeto: {projeto_selecionado}")
 
-                p.setFont("Helvetica", 12)
-                p.setFillColor(cor_detalhe)
-                p.drawCentredString(width / 2, height / 2 - 10, f"Projeto: {projeto_selecionado}")
+                # Caixa de destaque para o valor total
+                p.setStrokeColor(cor_destaque)
+                p.setLineWidth(2)
+                p.roundRect(width / 2 - 180, height / 2 - 70, 360, 60, 6, fill=0, stroke=1)
 
-                # Quadro de Valor Total estilizado
-                p.setStrokeColor(cor_marrom_escuro)
-                p.setLineWidth(1.5)
-                p.roundRect(width / 2 - 175, height / 2 - 80, 350, 50, 6, fill=0, stroke=1)
+                p.setFillColor(colors.white)
+                p.setFont("Helvetica-Bold", 18)
+                p.drawCentredString(width / 2, height / 2 - 35, f"VALOR TOTAL: R$ {total_geral:,.2f}")
 
-                p.setFillColor(cor_marrom_escuro)
-                p.setFont("Helvetica-Bold", 16)
-                p.drawCentredString(width / 2, height / 2 - 50, f"VALOR TOTAL: R$ {total_geral:,.2f}")
-
-                p.setFont("Helvetica", 9)
-                p.setFillColor(cor_detalhe)
-                p.drawCentredString(width / 2, 70, "Sis Baby Kids — Transformando ambientes com carinho e sofisticação.")
+                p.setFont("Helvetica", 10)
+                p.setFillColor(colors.HexColor("#9CA3AF"))
+                p.drawCentredString(width / 2, 80, "Agradecemos a preferência. Estamos à disposição para iniciar seu projeto.")
 
                 p.save()
                 buffer.seek(0)
                 
                 st.download_button(
-                    label="📥 Baixar Proposta Sis Baby Kids",
+                    label="📥 Baixar Proposta em PDF (Estilo Luxo)",
                     data=buffer,
-                    file_name=f"Proposta_SisBaby_{projeto_selecionado.replace(' ', '_')}.pdf",
+                    file_name=f"Proposta_Luxo_{projeto_selecionado.replace(' ', '_')}.pdf",
                     mime="application/pdf"
                 )
 
