@@ -5,6 +5,7 @@ from reportlab.pdfgen import canvas
 import io
 import requests
 from PIL import Image as PILImage
+import os
 
 # --- CONEXÃO SEGURA COM O SUPABASE ---
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -18,7 +19,7 @@ st.title("🗄️ Sistema de Móveis Planejados - Senhora Lavanderia")
 menu = st.sidebar.selectbox("Menu", ["Cadastrar Novo Item", "Ver Projetos & Gerar PDF"])
 
 if menu == "Cadastrar Novo Item":
-    st.header("Cadastrar Peça / Móvel")
+    st.header("Cadastrar Peças / Móveis")
     
     with st.form("form_cadastro", clear_on_submit=True):
         projeto = st.text_input("Nome do Projeto / Cliente (Ex: Quarto da Mini)")
@@ -27,7 +28,8 @@ if menu == "Cadastrar Novo Item":
         dimensoes = st.text_input("Dimensões (Ex: 1.20 x 0.80m)")
         preco = st.number_input("Preço (R$)", min_value=0.0, format="%.2f")
         
-        foto_file = st.file_uploader("Foto do Produto", type=["jpg", "jpeg", "png"])
+        # ATENÇÃO: accept_multiple_files=True permite selecionar várias fotos de uma vez!
+        fotos_files = st.file_uploader("Fotos do Produto", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
         
         submitted = st.form_submit_button("Salvar no Sistema")
         
@@ -35,39 +37,48 @@ if menu == "Cadastrar Novo Item":
             if not projeto or not ambiente:
                 st.error("Preencha pelo menos o nome do projeto e o ambiente!")
             else:
-                foto_url = ""
-                if foto_file:
-                    try:
-                        file_bytes = foto_file.read()
-                        file_name = f"{projeto}_{foto_file.name}".replace(" ", "_")
-                        
-                        # Upload para o Storage do Supabase
-                        supabase.storage.from_("fotos-moveis").upload(
-                            file=file_bytes,
-                            path=file_name,
-                            file_options={"content-type": foto_file.type}
-                        )
-                        
-                        public_url = supabase.storage.from_("fotos-moveis").get_public_url(file_name)
-                        foto_url = public_url
-                    except Exception as e:
-                        st.warning(f"Aviso ao enviar foto: {e}")
-
-                # Salva os dados no banco de dados
-                dados = {
-                    "projeto": projeto,
-                    "ambiente": ambiente,
-                    "fornecedor": fornecedor,
-                    "dimensoes": dimensoes,
-                    "preco": preco,
-                    "foto_url": foto_url
-                }
-                
-                try:
+                if not fotos_files:
+                    # Salva sem foto caso nenhuma tenha sido selecionada
+                    dados = {
+                        "projeto": projeto, "ambiente": ambiente, 
+                        "fornecedor": fornecedor, "dimensoes": dimensoes, 
+                        "preco": preco, "foto_url": ""
+                    }
                     supabase.table("projetos_moveis").insert(dados).execute()
-                    st.success("Item cadastrado com sucesso!")
-                except Exception as e:
-                    st.error(f"Erro ao salvar no banco de dados: {e}")
+                    st.success("Item cadastrado com sucesso (sem foto)!")
+                else:
+                    # Loop para salvar cada foto selecionada como um item separado no banco
+                    sucesso = True
+                    for foto_file in fotos_files:
+                        try:
+                            file_bytes = foto_file.read()
+                            file_name = f"{projeto}_{foto_file.name}".replace(" ", "_")
+                            
+                            # Upload para o Storage do Supabase
+                            supabase.storage.from_("fotos-moveis").upload(
+                                file=file_bytes,
+                                path=file_name,
+                                file_options={"content-type": foto_file.type}
+                            )
+                            
+                            public_url = supabase.storage.from_("fotos-moveis").get_public_url(file_name)
+                            
+                            # Salva cada imagem como uma linha no banco vinculada ao projeto
+                            dados = {
+                                "projeto": projeto,
+                                "ambiente": ambiente,
+                                "fornecedor": fornecedor,
+                                "dimensoes": dimensoes,
+                                "preco": preco,
+                                "foto_url": public_url
+                            }
+                            supabase.table("projetos_moveis").insert(dados).execute()
+                        except Exception as e:
+                            sucesso = False
+                            st.warning(f"Erro ao enviar a foto {foto_file.name}: {e}")
+                    
+                    if sucesso:
+                        st.success(f"{len(fotos_files)} foto(s) cadastrada(s) com sucesso!")
 
 elif menu == "Ver Projetos & Gerar PDF":
     st.header("Projetos Cadastrados")
@@ -96,7 +107,7 @@ elif menu == "Ver Projetos & Gerar PDF":
                     st.write(f"**Dimensões:** {item.get('dimensoes')}")
                     st.write(f"**Preço:** R$ {item.get('preco')}")
 
-            # Botão para gerar o PDF Comercial com as fotos embutidas
+            # Botão para gerar o PDF Comercial com todas as fotos
             st.markdown("### Gerar Proposta Comercial")
             if st.button("📄 Criar PDF com Fotos"):
                 buffer = io.BytesIO()
@@ -110,40 +121,33 @@ elif menu == "Ver Projetos & Gerar PDF":
                 
                 y = height - 100
                 for item in itens:
-                    # Se o espaço na página estiver acabando, cria uma nova página
                     if y < 180:
                         p.showPage()
                         y = height - 50
 
-                    # Desenha os textos do item
                     p.setFont("Helvetica-Bold", 11)
                     p.drawString(50, y, f"Ambiente: {item.get('ambiente')} | Fornecedor: {item.get('fornecedor')}")
                     p.setFont("Helvetica", 10)
                     p.drawString(50, y - 15, f"Dimensões: {item.get('dimensoes')} | Preço: R$ {item.get('preco')}")
 
-                    # Se houver foto, baixa e insere no PDF
                     foto_url = item.get('foto_url')
                     if foto_url:
                         try:
                             response_img = requests.get(foto_url)
                             if response_img.status_code == 200:
                                 img_io = io.BytesIO(response_img.content)
-                                
-                                # Abre a imagem com PIL para manipulação temporária
                                 img = PILImage.open(img_io)
                                 img_path = f"temp_{item.get('id')}.jpg"
                                 img.save(img_path)
                                 
-                                # Desenha a imagem no PDF (Posição X, Y, Largura, Altura)
                                 p.drawImage(img_path, 50, y - 130, width=100, height=100, preserveAspectRatio=True)
                                 
-                                # Remove o arquivo temporário da máquina
                                 if os.path.exists(img_path):
                                     os.remove(img_path)
                         except Exception as img_err:
                             print(f"Erro ao inserir imagem no PDF: {img_err}")
 
-                    y -= 150 # Espaço vertical reservado para o próximo item com foto
+                    y -= 150
 
                 p.save()
                 buffer.seek(0)
