@@ -58,15 +58,13 @@ with st.sidebar:
 abas_nomes = ["📊 Ver Projetos & Gerar PDF", "📦 Cadastrar Novo Item (Requer Senha)"]
 aba_pdf, aba_cad = st.tabs(abas_nomes)
 
-# --- FUNÇÃO PARA OTIMIZAR E REDUZIR O TAMANHO DA FOTO ---
-def otimizar_imagem(imagem_file, max_largura=1200, qualidade=80):
+# --- FUNÇÃO CORRIGIDA PARA REDUZIR O TAMANHO DA FOTO ---
+def otimizar_imagem(imagem_file, max_largura=1000, qualidade=75):
     img = PILImage.open(imagem_file)
     
-    # Converte para RGB caso esteja em RGBA (PNG transparente) para evitar erro ao salvar em JPEG
     if img.mode in ("RGBA", "P"):
         img = img.convert("RGB")
         
-    # Redimensiona mantendo a proporção se a largura for maior que o limite
     if img.width > max_largura:
         nova_altura = int((max_largura / img.width) * img.height)
         img = img.resize((max_largura, nova_altura), PILImage.Resampling.LANCZOS)
@@ -114,7 +112,6 @@ with aba_cad:
                         sucesso = True
                         for foto_file in fotos_files:
                             try:
-                                # Otimiza e reduz o tamanho da foto antes de enviar
                                 foto_otimizada = otimizar_imagem(foto_file)
                                 file_bytes = foto_otimizada.read()
                                 
@@ -143,7 +140,7 @@ with aba_cad:
                                 st.warning(f"Erro ao enviar a foto {foto_file.name}: {e}")
                         
                         if sucesso:
-                            st.success(f"{len(fotos_files)} foto(s) otimizada(s) e cadastrada(s) com sucesso!")
+                            st.success(f"{len(fotos_files)} foto(s) compactada(s) e cadastrada(s) com sucesso!")
 
 with aba_pdf:
     st.header("Gerenciamento de Projetos e Propostas")
@@ -325,9 +322,7 @@ with aba_pdf:
                                 if response_img.status_code == 200:
                                     img_io = io.BytesIO(response_img.content)
                                     img = PILImage.open(img_io)
-                                    img.verify()
                                     
-                                    img = PILImage.open(io.BytesIO(response_img.content))
                                     img_path = f"temp_item_{idx}.jpg"
                                     img.save(img_path)
                                     
