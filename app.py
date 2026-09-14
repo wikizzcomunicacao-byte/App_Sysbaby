@@ -389,7 +389,7 @@ with aba_pdf:
                     st.session_state["total_geral"] = total_geral_calc
                     st.session_state["projeto_atual"] = projeto_selecionado
 
-            if st.session_state.get("pdf_gerado") and st.session_state.get("projeto_atual"] == projeto_selecionado:
+            if st.session_state.get("pdf_gerado") and (st.session_state.get("projeto_atual") == projeto_selecionado):
                 st.success("PDF gerado com sucesso!")
                 
                 st.download_button(
