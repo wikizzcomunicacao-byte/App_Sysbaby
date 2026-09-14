@@ -7,6 +7,7 @@ import io
 import requests
 from PIL import Image as PILImage
 import os
+import urllib.parse
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Sys Baby Kids - Móveis", layout="wide")
@@ -92,6 +93,9 @@ with aba2:
         else:
             projeto_selecionado = st.selectbox("Selecione o Projeto para visualizar", projetos)
             
+            # Campo opcional para colocar o telefone do cliente para o atalho do WhatsApp
+            telefone_cliente = st.text_input("Telefone do Cliente com DDD (Ex: 17999998888) - Opcional")
+            
             itens_resp = supabase.table("projetos_moveis").select("*").eq("projeto", projeto_selecionado).execute()
             itens = itens_resp.data
             
@@ -101,7 +105,6 @@ with aba2:
             
             for item in itens:
                 st.markdown("---")
-                # Checkbox para o usuário marcar/desmarcar o item (já vem marcado por padrão)
                 marcado = st.checkbox(f"Incluir na proposta: **{item.get('ambiente')}** (R$ {item.get('preco')})", value=True, key=f"item_{item.get('id')}")
                 
                 col1, col2 = st.columns([1, 2])
@@ -118,8 +121,8 @@ with aba2:
                     itens_selecionados.append(item)
 
             st.markdown("---")
-            # Botão para gerar o PDF Estilo Luxo apenas com os itens selecionados
             st.markdown("### Gerar Proposta Comercial de Luxo")
+            
             if st.button("📄 Criar PDF Estilo Luxo"):
                 if not itens_selecionados:
                     st.warning("Selecione pelo menos um item para gerar o PDF!")
@@ -128,12 +131,11 @@ with aba2:
                     p = canvas.Canvas(buffer, pagesize=A4)
                     width, height = A4
 
-                    # Cores sofisticadas do tema Luxo
-                    cor_fundo_topo = colors.HexColor("#111827") # Cinza chumbo escuro / quase preto
-                    cor_destaque = colors.HexColor("#D97706")   # Tom dourado / âmbar elegante
+                    cor_fundo_topo = colors.HexColor("#111827")
+                    cor_destaque = colors.HexColor("#D97706")
                     cor_texto_cinza = colors.HexColor("#4B5563")
 
-                    # --- CAPA / PÁGINA DE APRESENTAÇÃO ---
+                    # --- CAPA ---
                     p.setFillColor(cor_fundo_topo)
                     p.rect(0, 0, width, height, fill=1, stroke=0)
 
@@ -149,22 +151,20 @@ with aba2:
                     p.setFont("Helvetica", 12)
                     p.drawCentredString(width / 2, height / 2 - 40, f"Cliente / Projeto: {projeto_selecionado}")
                     
-                    p.showPage() # Fim da capa, passa para as páginas de catálogo de produtos
+                    p.showPage()
 
                     total_geral = 0
 
-                    # --- PÁGINAS DE VITRINE (UM MÓVEL POR PÁGINA) ---
+                    # --- PÁGINAS DE VITRINE ---
                     for idx, item in enumerate(itens_selecionados, 1):
                         try:
                             total_geral += float(item.get('preco') or 0)
                         except:
                             pass
 
-                        # Fundo levemente off-white para dar requinte
                         p.setFillColor(colors.HexColor("#F9FAFB"))
                         p.rect(0, 0, width, height, fill=1, stroke=0)
 
-                        # Barra superior minimalista
                         p.setFillColor(cor_fundo_topo)
                         p.rect(0, height - 50, width, 50, fill=1, stroke=0)
                         p.setFillColor(colors.white)
@@ -173,29 +173,24 @@ with aba2:
                         p.setFont("Helvetica", 10)
                         p.drawRightString(width - 40, height - 30, f"Peça {idx} de {len(itens_selecionados)}")
 
-                        # Título do Ambiente em destaque luxuoso
                         p.setFillColor(cor_fundo_topo)
                         p.setFont("Helvetica-Bold", 18)
                         p.drawString(40, height - 90, f"{item.get('ambiente').upper()}")
 
-                        # Especificações Técnicas refinadas
                         p.setFont("Helvetica", 11)
                         p.setFillColor(cor_texto_cinza)
                         p.drawString(40, height - 115, f"Fornecedor: {item.get('fornecedor') or 'Exclusivo'}")
                         p.drawString(250, height - 115, f"Dimensões: {item.get('dimensoes') or 'Sob Medida'}")
 
-                        # Preço em destaque elegante
                         preco_val = item.get('preco') or 0.0
                         p.setFont("Helvetica-Bold", 14)
                         p.setFillColor(cor_destaque)
                         p.drawRightString(width - 40, height - 115, f"R$ {float(preco_val):,.2f}")
 
-                        # Linha divisória fina e elegante
                         p.setStrokeColor(colors.HexColor("#E5E7EB"))
                         p.setLineWidth(1)
                         p.line(40, height - 130, width - 40, height - 130)
 
-                        # FOTO GRANDE EM DESTAQUE TOTAL (Modo Vitrine de Luxo)
                         foto_url = item.get('foto_url')
                         if foto_url:
                             try:
@@ -206,27 +201,24 @@ with aba2:
                                     img_path = f"temp_{item.get('id')}.jpg"
                                     img.save(img_path)
                                     
-                                    # Moldura sutil para a foto
                                     p.setFillColor(colors.white)
                                     p.setStrokeColor(colors.HexColor("#D1D5DB"))
                                     p.roundRect(35, 120, width - 70, height - 280, 8, fill=1, stroke=1)
                                     
-                                    # Imagem centralizada e gigante
                                     p.drawImage(img_path, 50, 135, width=width - 100, height=height - 310, preserveAspectRatio=True, anchor='c')
                                     
                                     if os.path.exists(img_path):
                                         os.remove(img_path)
                             except Exception as img_err:
-                                print(f"Erro ao inserir imagem no PDF: {img_err}")
+                                print(f"Erro ao inserir imagem: {img_err}")
 
-                        # Rodapé da página de especificação
                         p.setFillColor(cor_texto_cinza)
                         p.setFont("Helvetica", 9)
                         p.drawCentredString(width / 2, 40, "Documento confidencial gerado para apresentação comercial.")
 
                         p.showPage()
 
-                    # --- PÁGINA FINAL DE RESUMO / ENCERRAMENTO ---
+                    # --- RESUMO ---
                     p.setFillColor(cor_fundo_topo)
                     p.rect(0, 0, width, height, fill=1, stroke=0)
 
@@ -238,7 +230,6 @@ with aba2:
                     p.setFont("Helvetica", 14)
                     p.drawCentredString(width / 2, height / 2 + 15, f"Projeto: {projeto_selecionado}")
 
-                    # Caixa de destaque para o valor total
                     p.setStrokeColor(cor_destaque)
                     p.setLineWidth(2)
                     p.roundRect(width / 2 - 180, height / 2 - 70, 360, 60, 6, fill=0, stroke=1)
@@ -254,12 +245,35 @@ with aba2:
                     p.save()
                     buffer.seek(0)
                     
-                    st.download_button(
-                        label="📥 Baixar Proposta em PDF (Estilo Luxo)",
-                        data=buffer,
-                        file_name=f"Proposta_Luxo_{projeto_selecionado.replace(' ', '_')}.pdf",
-                        mime="application/pdf"
-                    )
+                    # Salva o PDF na sessão para habilitar o botão do WhatsApp logo abaixo
+                    st.session_data = buffer.getvalue()
+                    st.session_state["pdf_gerado"] = True
+                    st.session_state["pdf_nome"] = f"Proposta_Luxo_{projeto_selecionado.replace(' ', '_')}.pdf"
+
+            # Se o PDF já foi gerado, mostra o botão de Download e o link direto do WhatsApp
+            if st.session_state.get("pdf_gerado"):
+                st.success("PDF gerado com sucesso!")
+                
+                st.download_button(
+                    label="📥 Baixar Proposta em PDF",
+                    data=st.session_data,
+                    file_name=st.session_state["pdf_nome"],
+                    mime="application/pdf"
+                )
+
+                # Link dinâmico do WhatsApp com mensagem pronta
+                texto_zap = urllib.parse.quote(f"Olá! Segue em anexo a proposta comercial do projeto *{projeto_selecionado}* da Sys Baby Kids. Valor total: R$ {total_geral:,.2f}.")
+                fone_limpo = "".join(filter(str.isdigit, telefone_cliente)) if telefone_cliente else ""
+                link_whatsapp = f"https://wa.me/55{fone_limpo}?text={texto_zap}" if fone_limpo else f"https://wa.me/?text={texto_zap}"
+
+                st.markdown(
+                    f"""
+                    <a href="{link_whatsapp}" target="_blank" style="display:inline-block;padding:10px 20px;background-color:#25D366;color:white;text-decoration:none;font-weight:bold;border-radius:6px;margin-top:10px;">
+                        💬 Abrir WhatsApp com Mensagem Pronta
+                    </a>
+                    """,
+                    unsafe_allow_html=True
+                )
 
     except Exception as e:
         st.error(f"Erro ao carregar dados do Supabase: {e}")
