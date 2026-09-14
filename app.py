@@ -1,103 +1,133 @@
 import os
-from flask import Flask, render_template, request, jsonify, send_file
+import io
 from supabase import create_client, Client
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-import io
 
-app = Flask(__name__)
-
-# Configurações do seu Supabase (Substitua pelas suas chaves reais)
+# --- CONFIGURAÇÕES DO SUPABASE ---
 SUPABASE_URL = "SUA_SUPABASE_URL_AQUI"
 SUPABASE_KEY = "SUA_SUPABASE_ANON_KEY_AQUI"
+
+# Inicializa o cliente do Supabase
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+def cadastrar_item():
+    print("\n--- CADASTRO DE NOVO ITEM PARA O PROJETO ---")
+    projeto = input("Nome do Projeto / Cliente: ").strip()
+    ambiente = input("Ambiente / Móvel (ex: Berço Safari): ").strip()
+    fornecedor = input("Fornecedor: ").strip()
+    dimensoes = input("Dimensões (ex: 1.20 x 0.80m): ").strip()
+    preco = input("Preço (R$): ").strip()
+    caminho_foto = input("Caminho completo da foto no seu computador (ex: C:/fotos/berco.jpg): ").strip()
 
-@app.route('/api/cadastrar', methods=['POST'])
-def cadastrar():
-    try:
-        projeto = request.form.get('projeto')
-        ambiente = request.form.get('ambiente')
-        fornecedor = request.form.get('fornecedor')
-        dimensoes = request.form.get('dimensoes')
-        preco = request.form.get('preco')
-        
-        file = request.files.get('foto')
-        foto_url = ""
+    foto_url = ""
 
-        if file:
-            # Faz o upload da foto diretamente pelo Python para o Supabase Storage
-            file_bytes = file.read()
-            file_name = f"{projeto}_{file.filename}".replace(" ", "_")
+    # Faz o upload da foto se o caminho existir
+    if caminho_foto and os.path.exists(caminho_foto):
+        print("Enviando foto para o Supabase Storage...")
+        try:
+            with open(caminho_foto, "rb") as f:
+                file_bytes = f.read()
             
-            res = supabase.storage.from_("fotos-moveis").upload(
+            file_name = f"{projeto}_{os.path.basename(caminho_foto)}".replace(" ", "_")
+            
+            # Envia para o bucket 'fotos-moveis'
+            supabase.storage.from_("fotos-moveis").upload(
                 file=file_bytes,
                 path=file_name,
-                file_options={"content-type": file.content_type}
+                file_options={"content-type": "image/jpeg"}
             )
             
-            # Pega a URL pública da imagem
+            # Pega a URL pública
             public_url = supabase.storage.from_("fotos-moveis").get_public_url(file_name)
             foto_url = public_url
+            print("Foto enviada com sucesso!")
+        except Exception as e:
+            print(f"Erro ao enviar a foto: {e}")
+    else:
+        print("Foto não informada ou caminho inválido. Prosseguindo sem foto.")
 
-        # Salva os dados na tabela do Supabase
-        data = {
-            "projeto": projeto,
-            "ambiente": ambiente,
-            "fornecedor": fornecedor,
-            "dimensoes": dimensoes,
-            "preco": preco,
-            "foto_url": foto_url
-        }
-        
-        supabase.table("projetos_moveis").insert(data).execute()
+    # Salva os dados na tabela do Supabase
+    dados = {
+        "projeto": projeto,
+        "ambiente": ambiente,
+        "fornecedor": fornecedor,
+        "dimensoes": dimensoes,
+        "preco": preco,
+        "foto_url": foto_url
+    }
 
-        return jsonify({"success": True, "message": "Cadastrado com sucesso!"})
-    
+    try:
+        supabase.table("projetos_moveis").insert(dados).execute()
+        print("Item cadastrado com sucesso no banco de dados!")
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        print(f"Erro ao salvar no banco de dados: {e}")
 
-@app.route('/api/gerar-pdf/<projeto_nome>', methods=['GET'])
-def gerar_pdf(projeto_nome):
-    # Puxa todos os itens daquele projeto específico do banco de dados
+def gerar_pdf_projeto():
+    print("\n--- GERAR PDF DO PROJETO ---")
+    projeto_nome = input("Digite o nome exato do Projeto / Cliente para gerar o PDF: ").strip()
+
+    # Busca os itens no Supabase
     response = supabase.table("projetos_moveis").select("*").eq("projeto", projeto_nome).execute()
     itens = response.data
 
     if not itens:
-        return "Projeto não encontrado", 404
+        print(f"Nenhum item encontrado para o projeto '{projeto_nome}'.")
+        return
 
-    # Cria o PDF em memória usando ReportLab (tamanho A4)
-    buffer = io.BytesIO()
-    p = canvas.Canvas(buffer, pagesize=A4)
+    nome_arquivo = f"Proposta_{projeto_nome.replace(' ', '_')}.pdf"
+    
+    # Cria o PDF usando ReportLab (tamanho A4)
+    p = canvas.Canvas(nome_arquivo, pagesize=A4)
     width, height = A4
 
-    # Cabeçalho do PDF
+    # Cabeçalho
     p.setFont("Helvetica-Bold", 16)
-    p.drawString(50, height - 50, f"Móveis Planejados - Proposta")
+    p.drawString(50, height - 50, "Móveis Planejados - Proposta Comercial")
     p.setFont("Helvetica", 12)
-    p.drawString(50, height - 70, f"Projeto: {projeto_nome}")
+    p.drawString(50, height - 75, f"Projeto: {projeto_nome}")
     
-    y = height - 110
+    y = height - 120
     for item in itens:
-        if y < 100:  # Cria nova página se faltar espaço
+        if y < 100:  # Quebra de página se necessário
             p.showPage()
             y = height - 50
 
         p.setFont("Helvetica-Bold", 11)
-        p.drawString(50, y, f"Ambiente: {item.get('ambiente')} ({item.get('fornecedor')})")
+        p.drawString(50, y, f"Ambiente: {item.get('ambiente')} | Fornecedor: {item.get('fornecedor')}")
         p.setFont("Helvetica", 10)
-        p.drawString(50, y - 15, f"Dimensões: {item.get('dimensoes')} | Preço: R$ {item.get('preco')}")
+        p.drawString(50, y - 18, f"Dimensões: {item.get('dimensoes')} | Preço: R$ {item.get('preco')}")
         
+        # Se houver foto cadastrada, exibe o link no PDF
+        if item.get('foto_url'):
+            p.setFillColorRGB(0, 0, 1) # Azul para indicar link
+            p.drawString(50, y - 36, f"Ver Foto: {item.get('foto_url')}")
+            p.setFillColorRGB(0, 0, 0) # Volta para preto
+            y -= 25
+
         y -= 50
 
     p.save()
-    buffer.seek(0)
+    print(f"PDF gerado com sucesso: {nome_arquivo}")
 
-    return send_file(buffer, as_attachment=True, download_name=f"Proposta_{projeto_nome}.pdf", mimetype='application/pdf')
+def menu():
+    while True:
+        print("\n=== SISTEMA DE MÓVEIS PLANEJADOS (PYTHON) ===")
+        print("1. Cadastrar novo item/móvel")
+        print("2. Gerar PDF do projeto")
+        print("3. Sair")
+        
+        opcao = input("Escolha uma opção: ").strip()
+        
+        if opcao == "1":
+            cadastrar_item()
+        elif opcao == "2":
+            gerar_pdf_projeto()
+        elif opcao == "3":
+            print("Saindo...")
+            break
+        else:
+            print("Opção inválida. Tente novamente.")
 
-# Bloco para rodar localmente no computador (a Vercel ignora isso automaticamente)
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+if __name__ == "__main__":
+    menu()
