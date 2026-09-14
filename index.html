@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Móveis Planejados - Catálogo Interno</title>
+    <!-- Biblioteca de compactação de imagem -->
+    <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.1/dist/browser-image-compression.js"></script>
+    <!-- SDK do Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f7f6; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h2 { color: #2c3e50; text-align: center; }
+        label { display: block; margin-top: 10px; font-weight: bold; font-size: 14px; }
+        input, select, button { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { background: #25D366; color: white; font-weight: bold; border: none; cursor: pointer; margin-top: 15px; font-size: 16px; }
+        button:hover { background: #1ebe5d; }
+        .listagem { margin-top: 30px; border-top: 1px solid #ddd; padding-top: 15px; }
+        .item-card { display: flex; align-items: center; background: #fafafa; padding: 10px; margin-bottom: 10px; border-radius: 4px; border: 1px solid #eee; }
+        .item-card img { width: 60px; height: 60px; object-fit: cover; border-radius: 4px; margin-right: 15px; }
+        .item-info { font-size: 14px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Novo Item para o Projeto</h2>
+    
+    <label>Nome do Cliente / Projeto:</label>
+    <input type="text" id="projeto" placeholder="Ex: Quarto da Mini">
+
+    <label>Ambiente / Móvel:</label>
+    <input type="text" id="ambiente" placeholder="Ex: Berço Safari">
+
+    <label>Fornecedor:</label>
+    <input type="text" id="fornecedor" placeholder="Ex: Marcenaria X">
+
+    <label>Dimensões:</label>
+    <input type="text" id="dimensoes" placeholder="Ex: 1.20 x 0.80m">
+
+    <label>Preço (R$):</label>
+    <input type="number" id="preco" placeholder="0.00">
+
+    <label>Foto do Produto:</label>
+    <input type="file" id="fotoInput" accept="image/*">
+
+    <button onclick="cadastrarItem()">Salvar e Enviar para o Supabase</button>
+
+    <div class="listagem">
+        <h3>Itens Cadastrados no Projeto</h3>
+        <div id="containerItens">Carregando...</div>
+    </div>
+</div>
+
+<script>
+    // Configurações do seu Supabase (Substitua pelas suas chaves reais)
+    const SUPABASE_URL = 'SUA_SUPABASE_URL_AQUI';
+    const SUPABASE_ANON_KEY = 'SUA_SUPABASE_ANON_KEY_AQUI';
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    async function cadastrarItem() {
+        const projeto = document.getElementById('projeto').value;
+        const ambiente = document.getElementById('ambiente').value;
+        const fornecedor = document.getElementById('fornecedor').value;
+        const dimensoes = document.getElementById('dimensoes').value;
+        const preco = document.getElementById('preco').value;
+        const fileInput = document.getElementById('fotoInput');
+
+        if (!projeto || !fileInput.files.length) {
+            alert('Preencha o nome do projeto e selecione uma foto!');
+            return;
+        }
+
+        const file = fileInput.files[0];
+
+        try {
+            alert('Compactando imagem...');
+            // 1. Compacta a imagem no navegador para economizar espaço
+            const options = { maxSizeMB: 0.2, maxWidthOrHeight: 1024, useWebWorker: true };
+            const compressedFile = await imageCompression(file, options);
+
+            alert('Enviando para o Supabase...');
+            // 2. Faz o upload da foto compactada para o Supabase Storage (Bucket chamado "fotos-moveis")
+            const fileName = `${Date.now()}_${file.name}`;
+            const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('fotos-moveis')
+                .upload(fileName, compressedFile);
+
+            if (uploadError) throw uploadError;
+
+            // Pega a URL pública da imagem salva
+            const { data: publicUrlData } = supabase.storage
+                .from('fotos-moveis')
+                .getPublicUrl(fileName);
+
+            const fotoUrl = publicUrlData.publicUrl;
+
+            // 3. Salva os dados textuais e o link da foto na tabela do banco de dados
+            const { error: dbError } = await supabase
+                .from('projetos_moveis')
+                .insert([{ projeto, ambiente, fornecedor, dimensoes, preco, foto_url: fotoUrl }]);
+
+            if (dbError) throw dbError;
+
+            alert('Cadastrado com sucesso!');
+            limparCampos();
+            carregarItens();
+
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao cadastrar item: ' + error.message);
+        }
+    }
+
+    function limparCampos() {
+        document.getElementById('ambiente').value = '';
+        document.getElementById('fornecedor').value = '';
+        document.getElementById('dimensoes').value = '';
+        document.getElementById('preco').value = '';
+        document.getElementById('fotoInput').value = '';
+    }
+
+    async function carregarItens() {
+        const container = document.getElementById('containerItens');
+        container.innerHTML = 'Carregando...';
+
+        const { data, error } = await supabase
+            .from('projetos_moveis')
+            .select('*')
+            .order('id', { ascending: false });
+
+        if (error) {
+            container.innerHTML = 'Erro ao carregar itens.';
+            return;
+        }
+
+        if (data.length === 0) {
+            container.innerHTML = 'Nenhum item cadastrado ainda.';
+            return;
+        }
+
+        container.innerHTML = '';
+        data.forEach(item => {
+            container.innerHTML += `
+                <div class="item-card">
+                    <img src="${item.foto_url}" alt="Foto">
+                    <div class="item-info">
+                        <strong>${item.projeto} - ${item.ambiente}</strong><br>
+                        Fornecedor: ${item.fornecedor || 'N/D'} | Dim: ${item.dimensoes || 'N/D'}<br>
+                        <strong>R$ ${item.preco || '0.00'}</strong>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    // Carrega a listagem assim que a página abre
+    carregarItens();
+</script>
+
+</body>
+</html>
