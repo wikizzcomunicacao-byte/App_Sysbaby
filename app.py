@@ -102,58 +102,57 @@ elif menu == "Ver Projetos & Gerar PDF":
                     st.write(f"**Dimensões:** {item.get('dimensoes')}")
                     st.write(f"**Preço:** R$ {item.get('preco')}")
 
-            # Botão para gerar o PDF Comercial Profissional
+            # Botão para gerar o PDF Comercial com Fotos Grandes
             st.markdown("### Gerar Proposta Comercial")
-            if st.button("📄 Criar PDF Profissional"):
+            if st.button("📄 Criar PDF com Fotos Grandes"):
                 buffer = io.BytesIO()
                 p = canvas.Canvas(buffer, pagesize=A4)
                 width, height = A4
 
                 # Cabeçalho Elegante
                 p.setFillColor(colors.HexColor("#1e293b"))
-                p.rect(0, height - 70, width, 70, fill=1, stroke=0)
+                p.rect(0, height - 60, width, 60, fill=1, stroke=0)
                 
                 p.setFillColor(colors.white)
-                p.setFont("Helvetica-Bold", 16)
-                p.drawString(40, height - 30, "Senhora Lavanderia & Móveis")
-                p.setFont("Helvetica", 11)
-                p.drawString(40, height - 50, f"Proposta Comercial - Projeto: {projeto_selecionado}")
+                p.setFont("Helvetica-Bold", 15)
+                p.drawString(40, height - 25, "Senhora Lavanderia & Móveis")
+                p.setFont("Helvetica", 10)
+                p.drawString(40, height - 43, f"Proposta Comercial - Projeto: {projeto_selecionado}")
 
-                y = height - 110
                 total_geral = 0
+                y = height - 90
 
                 for item in itens:
-                    # Calcula o total geral
                     try:
                         total_geral += float(item.get('preco') or 0)
                     except:
                         pass
 
-                    # Verifica se precisa de nova página
-                    if y < 220:
+                    # Cada item vai ocupar um bloco grande (240 pontos de altura). Se não couber, vai pra próxima página.
+                    if y < 260:
                         p.showPage()
-                        y = height - 60
+                        y = height - 50
 
-                    # Caixa de fundo sutil para cada item
+                    # Caixa de fundo para o item
                     p.setFillColor(colors.HexColor("#f8fafc"))
-                    p.setStrokeColor(colors.HexColor("#e2e8f0"))
-                    p.roundRect(40, y - 140, width - 80, 130, 6, fill=1, stroke=1)
+                    p.setStrokeColor(colors.HexColor("#cbd5e1"))
+                    p.roundRect(40, y - 230, width - 80, 220, 8, fill=1, stroke=1)
 
-                    # Textos do item
+                    # Informações do Móvel (Texto acima)
                     p.setFillColor(colors.HexColor("#0f172a"))
-                    p.setFont("Helvetica-Bold", 12)
-                    p.drawString(160, y - 25, f"Ambiente: {item.get('ambiente')}")
-                    
+                    p.setFont("Helvetica-Bold", 13)
+                    p.drawString(55, y - 25, f"Ambiente: {item.get('ambiente')}")
+
                     p.setFont("Helvetica", 10)
                     p.setFillColor(colors.HexColor("#334155"))
-                    p.drawString(160, y - 45, f"Fornecedor: {item.get('fornecedor') or 'N/D'}")
-                    p.drawString(160, y - 65, f"Dimensões: {item.get('dimensoes') or 'N/D'}")
-                    
-                    p.setFont("Helvetica-Bold", 11)
-                    p.setFillColor(colors.HexColor("#16a34a")) # Verde para destaque do preço
-                    p.drawString(160, y - 90, f"Preço: R$ {item.get('preco') or '0.00'}")
+                    p.drawString(55, y - 45, f"Fornecedor: {item.get('fornecedor') or 'N/D'}")
+                    p.drawString(220, y - 45, f"Dimensões: {item.get('dimensoes') or 'N/D'}")
 
-                    # Inserção da Foto padronizada dentro da caixa
+                    p.setFont("Helvetica-Bold", 12)
+                    p.setFillColor(colors.HexColor("#16a34a")) # Verde destaque
+                    p.drawString(400, y - 45, f"R$ {item.get('preco') or '0.00'}")
+
+                    # FOTO GRANDE EM DESTAQUE (Vitrine do Móvel)
                     foto_url = item.get('foto_url')
                     if foto_url:
                         try:
@@ -164,32 +163,32 @@ elif menu == "Ver Projetos & Gerar PDF":
                                 img_path = f"temp_{item.get('id')}.jpg"
                                 img.save(img_path)
                                 
-                                # Desenha a foto redimensionada e alinhada à esquerda da caixa
-                                p.drawImage(img_path, 55, y - 125, width=90, height=100, preserveAspectRatio=True, anchor='c')
+                                # Foto grande centralizada na caixa (Largura: 320, Altura: 150)
+                                p.drawImage(img_path, 135, y - 210, width=320, height=145, preserveAspectRatio=True, anchor='c')
                                 
                                 if os.path.exists(img_path):
                                     os.remove(img_path)
                         except Exception as img_err:
                             print(f"Erro ao inserir imagem no PDF: {img_err}")
 
-                    y -= 150
+                    y -= 245
 
                 # Rodapé com Valor Total
                 if y < 80:
                     p.showPage()
-                    y = height - 60
+                    y = height - 50
 
                 p.setFillColor(colors.HexColor("#1e293b"))
-                p.roundRect(40, y - 40, width - 80, 35, 4, fill=1, stroke=0)
+                p.roundRect(40, y - 35, width - 80, 32, 4, fill=1, stroke=0)
                 p.setFillColor(colors.white)
                 p.setFont("Helvetica-Bold", 12)
-                p.drawString(55, y - 22, f"VALOR TOTAL DO PROJETO: R$ {total_geral:.2f}")
+                p.drawString(55, y - 18, f"VALOR TOTAL DO PROJETO: R$ {total_geral:.2f}")
 
                 p.save()
                 buffer.seek(0)
                 
                 st.download_button(
-                    label="📥 Baixar PDF Profissional",
+                    label="📥 Baixar PDF com Fotos Grandes",
                     data=buffer,
                     file_name=f"Proposta_{projeto_selecionado.replace(' ', '_')}.pdf",
                     mime="application/pdf"
