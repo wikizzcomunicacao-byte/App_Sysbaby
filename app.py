@@ -1,133 +1,135 @@
-import os
-import io
+import streamlit as st
 from supabase import create_client, Client
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+import io
 
-# --- CONFIGURAÇÕES DO SUPABASE ---
-SUPABASE_URL = "SUA_SUPABASE_URL_AQUI"
-SUPABASE_KEY = "SUA_SUPABASE_ANON_KEY_AQUI"
+# --- CONEXÃO SEGURA COM O SUPABASE ---
+# As chaves são lidas automaticamente do painel do Streamlit (Settings > Secrets)
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
-# Inicializa o cliente do Supabase
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def cadastrar_item():
-    print("\n--- CADASTRO DE NOVO ITEM PARA O PROJETO ---")
-    projeto = input("Nome do Projeto / Cliente: ").strip()
-    ambiente = input("Ambiente / Móvel (ex: Berço Safari): ").strip()
-    fornecedor = input("Fornecedor: ").strip()
-    dimensoes = input("Dimensões (ex: 1.20 x 0.80m): ").strip()
-    preco = input("Preço (R$): ").strip()
-    caminho_foto = input("Caminho completo da foto no seu computador (ex: C:/fotos/berco.jpg): ").strip()
+st.title("🗄️ Sistema de Móveis Planejados - Senhora Lavanderia")
 
-    foto_url = ""
+# Menu lateral
+menu = st.sidebar.selectbox("Menu", ["Cadastrar Novo Item", "Ver Projetos & Gerar PDF"])
 
-    # Faz o upload da foto se o caminho existir
-    if caminho_foto and os.path.exists(caminho_foto):
-        print("Enviando foto para o Supabase Storage...")
-        try:
-            with open(caminho_foto, "rb") as f:
-                file_bytes = f.read()
-            
-            file_name = f"{projeto}_{os.path.basename(caminho_foto)}".replace(" ", "_")
-            
-            # Envia para o bucket 'fotos-moveis'
-            supabase.storage.from_("fotos-moveis").upload(
-                file=file_bytes,
-                path=file_name,
-                file_options={"content-type": "image/jpeg"}
-            )
-            
-            # Pega a URL pública
-            public_url = supabase.storage.from_("fotos-moveis").get_public_url(file_name)
-            foto_url = public_url
-            print("Foto enviada com sucesso!")
-        except Exception as e:
-            print(f"Erro ao enviar a foto: {e}")
-    else:
-        print("Foto não informada ou caminho inválido. Prosseguindo sem foto.")
+if menu == "Cadastrar Novo Item":
+    st.header("Cadastrar Peça / Móvel")
+    
+    with st.form("form_cadastro", clear_on_submit=True):
+        projeto = st.text_input("Nome do Projeto / Cliente (Ex: Quarto da Mini)")
+        ambiente = st.text_input("Ambiente / Móvel (Ex: Berço Safari)")
+        fornecedor = st.text_input("Fornecedor")
+        dimensoes = st.text_input("Dimensões (Ex: 1.20 x 0.80m)")
+        preco = st.number_input("Preço (R$)", min_value=0.0, format="%.2f")
+        
+        foto_file = st.file_uploader("Foto do Produto", type=["jpg", "jpeg", "png"])
+        
+        submitted = st.form_submit_button("Salvar no Sistema")
+        
+        if submitted:
+            if not projeto or not ambiente:
+                st.error("Preencha pelo menos o nome do projeto e o ambiente!")
+            else:
+                foto_url = ""
+                if foto_file:
+                    try:
+                        file_bytes = foto_file.read()
+                        file_name = f"{projeto}_{foto_file.name}".replace(" ", "_")
+                        
+                        # Upload para o Storage do Supabase (Bucket 'fotos-moveis')
+                        supabase.storage.from_("fotos-moveis").upload(
+                            file=file_bytes,
+                            path=file_name,
+                            file_options={"content-type": foto_file.type}
+                        )
+                        
+                        # Pega a URL pública da imagem
+                        public_url = supabase.storage.from_("fotos-moveis").get_public_url(file_name)
+                        foto_url = public_url
+                    except Exception as e:
+                        st.warning(f"Aviso ao enviar foto: {e}")
 
-    # Salva os dados na tabela do Supabase
-    dados = {
-        "projeto": projeto,
-        "ambiente": ambiente,
-        "fornecedor": fornecedor,
-        "dimensoes": dimensoes,
-        "preco": preco,
-        "foto_url": foto_url
-    }
+                # Salva os dados textuais na tabela do Supabase
+                dados = {
+                    "projeto": projeto,
+                    "ambiente": ambiente,
+                    "fornecedor": fornecedor,
+                    "dimensoes": dimensoes,
+                    "preco": preco,
+                    "foto_url": foto_url
+                }
+                
+                try:
+                    supabase.table("projetos_moveis").insert(dados).execute()
+                    st.success("Item cadastrado com sucesso!")
+                except Exception as e:
+                    st.error(f"Erro ao salvar no banco de dados: {e}")
 
+elif menu == "Ver Projetos & Gerar PDF":
+    st.header("Projetos Cadastrados")
+    
     try:
-        supabase.table("projetos_moveis").insert(dados).execute()
-        print("Item cadastrado com sucesso no banco de dados!")
-    except Exception as e:
-        print(f"Erro ao salvar no banco de dados: {e}")
-
-def gerar_pdf_projeto():
-    print("\n--- GERAR PDF DO PROJETO ---")
-    projeto_nome = input("Digite o nome exato do Projeto / Cliente para gerar o PDF: ").strip()
-
-    # Busca os itens no Supabase
-    response = supabase.table("projetos_moveis").select("*").eq("projeto", projeto_nome).execute()
-    itens = response.data
-
-    if not itens:
-        print(f"Nenhum item encontrado para o projeto '{projeto_nome}'.")
-        return
-
-    nome_arquivo = f"Proposta_{projeto_nome.replace(' ', '_')}.pdf"
-    
-    # Cria o PDF usando ReportLab (tamanho A4)
-    p = canvas.Canvas(nome_arquivo, pagesize=A4)
-    width, height = A4
-
-    # Cabeçalho
-    p.setFont("Helvetica-Bold", 16)
-    p.drawString(50, height - 50, "Móveis Planejados - Proposta Comercial")
-    p.setFont("Helvetica", 12)
-    p.drawString(50, height - 75, f"Projeto: {projeto_nome}")
-    
-    y = height - 120
-    for item in itens:
-        if y < 100:  # Quebra de página se necessário
-            p.showPage()
-            y = height - 50
-
-        p.setFont("Helvetica-Bold", 11)
-        p.drawString(50, y, f"Ambiente: {item.get('ambiente')} | Fornecedor: {item.get('fornecedor')}")
-        p.setFont("Helvetica", 10)
-        p.drawString(50, y - 18, f"Dimensões: {item.get('dimensoes')} | Preço: R$ {item.get('preco')}")
+        response = supabase.table("projetos_moveis").select("projeto").execute()
+        projetos = list(set([item["projeto"] for item in response.data])) if response.data else []
         
-        # Se houver foto cadastrada, exibe o link no PDF
-        if item.get('foto_url'):
-            p.setFillColorRGB(0, 0, 1) # Azul para indicar link
-            p.drawString(50, y - 36, f"Ver Foto: {item.get('foto_url')}")
-            p.setFillColorRGB(0, 0, 0) # Volta para preto
-            y -= 25
-
-        y -= 50
-
-    p.save()
-    print(f"PDF gerado com sucesso: {nome_arquivo}")
-
-def menu():
-    while True:
-        print("\n=== SISTEMA DE MÓVEIS PLANEJADOS (PYTHON) ===")
-        print("1. Cadastrar novo item/móvel")
-        print("2. Gerar PDF do projeto")
-        print("3. Sair")
-        
-        opcao = input("Escolha uma opção: ").strip()
-        
-        if opcao == "1":
-            cadastrar_item()
-        elif opcao == "2":
-            gerar_pdf_projeto()
-        elif opcao == "3":
-            print("Saindo...")
-            break
+        if not projetos:
+            st.info("Nenhum projeto cadastrado ainda.")
         else:
-            print("Opção inválida. Tente novamente.")
+            projeto_selecionado = st.selectbox("Selecione o Projeto para visualizar", projetos)
+            
+            # Mostra os itens do projeto na tela
+            itens_resp = supabase.table("projetos_moveis").select("*").eq("projeto", projeto_selecionado).execute()
+            itens = itens_resp.data
+            
+            for item in itens:
+                st.markdown("---")
+                col1, col2 = st.columns([1, 2])
+                with col1:
+                    if item.get("foto_url"):
+                        st.image(item["foto_url"], width=150)
+                with col2:
+                    st.subheader(f"{item.get('ambiente')}")
+                    st.write(f"**Fornecedor:** {item.get('fornecedor')}")
+                    st.write(f"**Dimensões:** {item.get('dimensoes')}")
+                    st.write(f"**Preço:** R$ {item.get('preco')}")
 
-if __name__ == "__main__":
-    menu()
+            # Botão para gerar o PDF Comercial formatado
+            st.markdown("### Gerar Proposta Comercial")
+            if st.button("📄 Criar PDF do Projeto"):
+                buffer = io.BytesIO()
+                p = canvas.Canvas(buffer, pagesize=A4)
+                width, height = A4
+
+                p.setFont("Helvetica-Bold", 16)
+                p.drawString(50, height - 50, "Proposta Comercial - Móveis Planejados")
+                p.setFont("Helvetica", 12)
+                p.drawString(50, height - 75, f"Projeto: {projeto_selecionado}")
+                
+                y = height - 120
+                for item in itens:
+                    if y < 100:
+                        p.showPage()
+                        y = height - 50
+
+                    p.setFont("Helvetica-Bold", 11)
+                    p.drawString(50, y, f"Ambiente: {item.get('ambiente')} | Fornecedor: {item.get('fornecedor')}")
+                    p.setFont("Helvetica", 10)
+                    p.drawString(50, y - 18, f"Dimensões: {item.get('dimensoes')} | Preço: R$ {item.get('preco')}")
+                    y -= 50
+
+                p.save()
+                buffer.seek(0)
+                
+                st.download_button(
+                    label="📥 Clique aqui para baixar o PDF",
+                    data=buffer,
+                    file_name=f"Proposta_{projeto_selecionado.replace(' ', '_')}.pdf",
+                    mime="application/pdf"
+                )
+
+    except Exception as e:
+        st.error(f"Erro ao carregar dados do Supabase: {e}")
