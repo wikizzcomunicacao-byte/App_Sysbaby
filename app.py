@@ -57,7 +57,7 @@ with st.sidebar:
     elif senha_input:
         st.error("❌ Senha incorreta.")
 
-abas_nomes = ["📊 Ver Projetos & Gerar PDF", "📦 Cadastrar Novo Item (Requer Senha)"]
+abas_nomes = ["📊 Gerar Proposta & Catálogo", "📦 Cadastrar Novo Item (Requer Senha)"]
 aba_pdf, aba_cad = st.tabs(abas_nomes)
 
 # --- FUNÇÃO PARA REMOVER ACENTOS E CARACTERES ESPECIAIS ---
@@ -90,31 +90,32 @@ with aba_cad:
     if not admin_autenticado:
         st.warning("🔒 O cadastro de novos itens é restrito. Digite a senha correta na barra lateral à esquerda para desbloquear.")
     else:
-        st.markdown("Preencha os dados abaixo para adicionar um novo item ao catálogo do projeto.")
+        st.markdown("Preencha os dados abaixo. **Nome** e **Preço** são obrigatórios.")
         
         with st.form("form_cadastro", clear_on_submit=True):
             col_f1, col_f2 = st.columns(2)
             with col_f1:
-                projeto = st.text_input("Nome do Projeto / Cliente (Ex: Quarto da Mini)")
+                ambiente = st.text_input("Nome do Item / Móvel * (Ex: Berço Safari)")
                 fornecedor = st.text_input("Fornecedor")
-                preco = st.number_input("Preço (R$)", min_value=0.0, format="%.2f")
             with col_f2:
-                ambiente = st.text_input("Ambiente / Móvel (Ex: Berço Safari)")
                 dimensoes = st.text_input("Dimensões (Ex: 1.20 x 0.80m)")
+                preco = st.number_input("Preço (R$) *", min_value=0.0, format="%.2f")
             
             fotos_files = st.file_uploader("Fotos do Produto", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
             
             submitted = st.form_submit_button("💾 Salvar no Sistema", use_container_width=True)
             
             if submitted:
-                if not projeto or not ambiente:
-                    st.error("Preencha pelo menos o nome do projeto e o ambiente!")
+                if not ambiente or preco <= 0.0:
+                    st.error("Preencha obrigatoriamente o Nome do Item e um Preço válido!")
                 else:
                     if not fotos_files:
                         dados = {
-                            "projeto": projeto, "ambiente": ambiente, 
-                            "fornecedor": fornecedor, "dimensoes": dimensoes, 
-                            "preco": preco, "foto_url": ""
+                            "ambiente": ambiente, 
+                            "fornecedor": fornecedor, 
+                            "dimensoes": dimensoes, 
+                            "preco": preco, 
+                            "foto_url": ""
                         }
                         supabase.table("projetos_moveis").insert(dados).execute()
                         st.success("Item cadastrado com sucesso (sem foto)!")
@@ -125,9 +126,8 @@ with aba_cad:
                                 foto_otimizada = otimizar_imagem(foto_file)
                                 file_bytes = foto_otimizada.read()
                                 
-                                projeto_limpo = limpar_nome_arquivo(projeto)
                                 nome_original_limpo = limpar_nome_arquivo(os.path.splitext(foto_file.name)[0])
-                                file_name = f"{projeto_limpo}_{nome_original_limpo}.jpg"
+                                file_name = f"{limpar_nome_arquivo(ambiente)}_{nome_original_limpo}.jpg"
                                 
                                 supabase.storage.from_("fotos-moveis").upload(
                                     file=file_bytes,
@@ -138,7 +138,6 @@ with aba_cad:
                                 public_url = supabase.storage.from_("fotos-moveis").get_public_url(file_name)
                                 
                                 dados = {
-                                    "projeto": projeto,
                                     "ambiente": ambiente,
                                     "fornecedor": fornecedor,
                                     "dimensoes": dimensoes,
@@ -154,25 +153,22 @@ with aba_cad:
                             st.success(f"{len(fotos_files)} foto(s) compactada(s) e cadastrada(s) com sucesso!")
 
 with aba_pdf:
-    st.header("Gerenciamento de Projetos e Propostas")
+    st.header("Catálogo Geral & Geração de Proposta")
     
     try:
-        response = supabase.table("projetos_moveis").select("projeto").execute()
-        projetos = list(set([item["projeto"] for item in response.data])) if response.data else []
+        response = supabase.table("projetos_moveis").select("*").execute()
+        itens = response.data if response.data else []
         
-        if not projetos:
-            st.info("Nenhum projeto cadastrado ainda.")
+        if not itens:
+            st.info("Nenhum item cadastrado no sistema ainda.")
         else:
-            col_sel1, col_sel2 = st.columns([2, 1])
+            col_sel1, col_sel2 = st.columns(2)
             with col_sel1:
-                projeto_selecionado = st.selectbox("Selecione o Projeto para visualizar", projetos)
+                nome_cliente = st.text_input("Nome do Cliente / Projeto para a Proposta", placeholder="Ex: Quarto da Mini")
             with col_sel2:
                 telefone_cliente = st.text_input("WhatsApp do Cliente (Opcional)", placeholder="17999998888")
             
-            itens_resp = supabase.table("projetos_moveis").select("*").eq("projeto", projeto_selecionado).execute()
-            itens = itens_resp.data
-            
-            st.markdown("### Selecione os itens para a proposta:")
+            st.markdown("### Selecione os itens que farão parte desta proposta:")
             
             itens_selecionados = []
             
@@ -180,7 +176,7 @@ with aba_pdf:
                 item_id = item.get("id")
                 
                 with st.container(border=True):
-                    marcado = st.checkbox(f"Incluir na proposta: **{item.get('ambiente')}**", value=True, key=f"item_{item_id}")
+                    marcado = st.checkbox(f"Incluir na proposta: **{item.get('ambiente')}** (R$ {float(item.get('preco') or 0):,.2f})", value=True, key=f"item_{item_id}")
                     
                     if admin_autenticado:
                         col_img, col_info, col_acoes = st.columns([1, 2.5, 1])
@@ -216,10 +212,10 @@ with aba_pdf:
                 if admin_autenticado and st.session_state.get(f"edit_mode_{item_id}", False):
                     with st.form(f"form_edit_{item_id}"):
                         st.markdown(f"**Editando: {item.get('ambiente')}**")
-                        novo_ambiente = st.text_input("Ambiente / Móvel", value=item.get("ambiente"))
+                        novo_ambiente = st.text_input("Nome do Item / Móvel *", value=item.get("ambiente"))
                         novo_fornecedor = st.text_input("Fornecedor", value=item.get("fornecedor") or "")
                         novas_dimensoes = st.text_input("Dimensões", value=item.get("dimensoes") or "")
-                        novo_preco = st.number_input("Preço (R$)", min_value=0.0, value=float(item.get("preco") or 0.0), format="%.2f")
+                        novo_preco = st.number_input("Preço (R$) *", min_value=0.0, value=float(item.get("preco") or 0.0), format="%.2f")
                         
                         col_e1, col_e2 = st.columns(2)
                         with col_e1:
@@ -228,15 +224,18 @@ with aba_pdf:
                             cancelar_edicao = st.form_submit_button("❌ Cancelar", use_container_width=True)
                         
                         if salvar_edicao:
-                            supabase.table("projetos_moveis").update({
-                                "ambiente": novo_ambiente,
-                                "fornecedor": novo_fornecedor,
-                                "dimensoes": novas_dimensoes,
-                                "preco": novo_preco
-                            }).eq("id", item_id).execute()
-                            st.session_state[f"edit_mode_{item_id}"] = False
-                            st.success("Salvo com sucesso!")
-                            st.rerun()
+                            if not novo_ambiente or novo_preco <= 0.0:
+                                st.error("Nome e Preço são obrigatórios!")
+                            else:
+                                supabase.table("projetos_moveis").update({
+                                    "ambiente": novo_ambiente,
+                                    "fornecedor": novo_fornecedor,
+                                    "dimensoes": novas_dimensoes,
+                                    "preco": novo_preco
+                                }).eq("id", item_id).execute()
+                                st.session_state[f"edit_mode_{item_id}"] = False
+                                st.success("Salvo com sucesso!")
+                                st.rerun()
                         
                         if cancelar_edicao:
                             st.session_state[f"edit_mode_{item_id}"] = False
@@ -256,6 +255,8 @@ with aba_pdf:
                 if not itens_selecionados:
                     st.warning("Selecione pelo menos um item para gerar o PDF!")
                 else:
+                    nome_proj_pdf = nome_cliente.strip() if nome_cliente else "Proposta Exclusiva"
+                    
                     buffer = io.BytesIO()
                     p = canvas.Canvas(buffer, pagesize=A4)
                     width, height = A4
@@ -278,7 +279,7 @@ with aba_pdf:
 
                     p.setFillColor(colors.HexColor("#9CA3AF"))
                     p.setFont("Helvetica", 12)
-                    p.drawCentredString(width / 2, height / 2 - 40, f"Cliente / Projeto: {projeto_selecionado}")
+                    p.drawCentredString(width / 2, height / 2 - 40, f"Cliente / Projeto: {nome_proj_pdf}")
                     
                     p.showPage()
 
@@ -366,7 +367,7 @@ with aba_pdf:
 
                     p.setFillColor(cor_destaque)
                     p.setFont("Helvetica", 14)
-                    p.drawCentredString(width / 2, height / 2 + 15, f"Projeto: {projeto_selecionado}")
+                    p.drawCentredString(width / 2, height / 2 + 15, f"Projeto: {nome_proj_pdf}")
 
                     p.setStrokeColor(cor_destaque)
                     p.setLineWidth(2)
@@ -385,11 +386,11 @@ with aba_pdf:
                     
                     st.session_state["pdf_gerado"] = True
                     st.session_state["pdf_data"] = buffer.getvalue()
-                    st.session_state["pdf_nome"] = f"Proposta_Luxo_{projeto_selecionado.replace(' ', '_')}.pdf"
+                    st.session_state["pdf_nome"] = f"Proposta_Luxo_{nome_proj_pdf.replace(' ', '_')}.pdf"
                     st.session_state["total_geral"] = total_geral_calc
-                    st.session_state["projeto_atual"] = projeto_selecionado
+                    st.session_state["projeto_atual"] = nome_proj_pdf
 
-            if st.session_state.get("pdf_gerado") and (st.session_state.get("projeto_atual") == projeto_selecionado):
+            if st.session_state.get("pdf_gerado"):
                 st.success("PDF gerado com sucesso!")
                 
                 st.download_button(
@@ -401,7 +402,8 @@ with aba_pdf:
                 )
 
                 total_val = st.session_state.get("total_geral", 0)
-                texto_zap = urllib.parse.quote(f"Olá! Segue em anexo a proposta comercial do projeto *{projeto_selecionado}* da Sys Baby Kids. Valor total: R$ {total_val:,.2f}.")
+                proj_atual = st.session_state.get("projeto_atual", "Proposta")
+                texto_zap = urllib.parse.quote(f"Olá! Segue em anexo a proposta comercial do projeto *{proj_atual}* da Sys Baby Kids. Valor total: R$ {total_val:,.2f}.")
                 fone_limpo = "".join(filter(str.isdigit, telefone_cliente)) if telefone_cliente else ""
                 link_whatsapp = f"https://wa.me/55{fone_limpo}?text={texto_zap}" if fone_limpo else f"https://wa.me/?text={texto_zap}"
 
