@@ -93,7 +93,6 @@ with aba2:
         else:
             projeto_selecionado = st.selectbox("Selecione o Projeto para visualizar", projetos)
             
-            # Campo opcional para colocar o telefone do cliente para o atalho do WhatsApp
             telefone_cliente = st.text_input("Telefone do Cliente com DDD (Ex: 17999998888) - Opcional")
             
             itens_resp = supabase.table("projetos_moveis").select("*").eq("projeto", projeto_selecionado).execute()
@@ -153,12 +152,12 @@ with aba2:
                     
                     p.showPage()
 
-                    total_geral = 0
+                    total_geral_calc = 0
 
                     # --- PÁGINAS DE VITRINE ---
                     for idx, item in enumerate(itens_selecionados, 1):
                         try:
-                            total_geral += float(item.get('preco') or 0)
+                            total_geral_calc += float(item.get('preco') or 0)
                         except:
                             pass
 
@@ -236,7 +235,7 @@ with aba2:
 
                     p.setFillColor(colors.white)
                     p.setFont("Helvetica-Bold", 18)
-                    p.drawCentredString(width / 2, height / 2 - 35, f"VALOR TOTAL: R$ {total_geral:,.2f}")
+                    p.drawCentredString(width / 2, height / 2 - 35, f"VALOR TOTAL: R$ {total_geral_calc:,.2f}")
 
                     p.setFont("Helvetica", 10)
                     p.setFillColor(colors.HexColor("#9CA3AF"))
@@ -245,24 +244,25 @@ with aba2:
                     p.save()
                     buffer.seek(0)
                     
-                    # Salva o PDF na sessão para habilitar o botão do WhatsApp logo abaixo
-                    st.session_data = buffer.getvalue()
                     st.session_state["pdf_gerado"] = True
+                    st.session_state["pdf_data"] = buffer.getvalue()
                     st.session_state["pdf_nome"] = f"Proposta_Luxo_{projeto_selecionado.replace(' ', '_')}.pdf"
+                    st.session_state["total_geral"] = total_geral_calc
+                    st.session_state["projeto_atual"] = projeto_selecionado
 
-            # Se o PDF já foi gerado, mostra o botão de Download e o link direto do WhatsApp
-            if st.session_state.get("pdf_gerado"):
+            # Exibe os botões de download e WhatsApp se o PDF já foi gerado na sessão
+            if st.session_state.get("pdf_gerado") and st.session_state.get("projeto_atual") == projeto_selecionado:
                 st.success("PDF gerado com sucesso!")
                 
                 st.download_button(
                     label="📥 Baixar Proposta em PDF",
-                    data=st.session_data,
+                    data=st.session_state["pdf_data"],
                     file_name=st.session_state["pdf_nome"],
                     mime="application/pdf"
                 )
 
-                # Link dinâmico do WhatsApp com mensagem pronta
-                texto_zap = urllib.parse.quote(f"Olá! Segue em anexo a proposta comercial do projeto *{projeto_selecionado}* da Sys Baby Kids. Valor total: R$ {total_geral:,.2f}.")
+                total_val = st.session_state.get("total_geral", 0)
+                texto_zap = urllib.parse.quote(f"Olá! Segue em anexo a proposta comercial do projeto *{projeto_selecionado}* da Sys Baby Kids. Valor total: R$ {total_val:,.2f}.")
                 fone_limpo = "".join(filter(str.isdigit, telefone_cliente)) if telefone_cliente else ""
                 link_whatsapp = f"https://wa.me/55{fone_limpo}?text={texto_zap}" if fone_limpo else f"https://wa.me/?text={texto_zap}"
 
