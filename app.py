@@ -3,9 +3,10 @@ from supabase import create_client, Client
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 import io
+import requests
+from PIL import Image as PILImage
 
 # --- CONEXÃO SEGURA COM O SUPABASE ---
-# As chaves são lidas automaticamente do painel do Streamlit (Settings > Secrets)
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
@@ -40,20 +41,19 @@ if menu == "Cadastrar Novo Item":
                         file_bytes = foto_file.read()
                         file_name = f"{projeto}_{foto_file.name}".replace(" ", "_")
                         
-                        # Upload para o Storage do Supabase (Bucket 'fotos-moveis')
+                        # Upload para o Storage do Supabase
                         supabase.storage.from_("fotos-moveis").upload(
                             file=file_bytes,
                             path=file_name,
                             file_options={"content-type": foto_file.type}
                         )
                         
-                        # Pega a URL pública da imagem
                         public_url = supabase.storage.from_("fotos-moveis").get_public_url(file_name)
                         foto_url = public_url
                     except Exception as e:
                         st.warning(f"Aviso ao enviar foto: {e}")
 
-                # Salva os dados textuais na tabela do Supabase
+                # Salva os dados no banco de dados
                 dados = {
                     "projeto": projeto,
                     "ambiente": ambiente,
@@ -81,7 +81,6 @@ elif menu == "Ver Projetos & Gerar PDF":
         else:
             projeto_selecionado = st.selectbox("Selecione o Projeto para visualizar", projetos)
             
-            # Mostra os itens do projeto na tela
             itens_resp = supabase.table("projetos_moveis").select("*").eq("projeto", projeto_selecionado).execute()
             itens = itens_resp.data
             
@@ -97,35 +96,60 @@ elif menu == "Ver Projetos & Gerar PDF":
                     st.write(f"**Dimensões:** {item.get('dimensoes')}")
                     st.write(f"**Preço:** R$ {item.get('preco')}")
 
-            # Botão para gerar o PDF Comercial formatado
+            # Botão para gerar o PDF Comercial com as fotos embutidas
             st.markdown("### Gerar Proposta Comercial")
-            if st.button("📄 Criar PDF do Projeto"):
+            if st.button("📄 Criar PDF com Fotos"):
                 buffer = io.BytesIO()
                 p = canvas.Canvas(buffer, pagesize=A4)
                 width, height = A4
 
                 p.setFont("Helvetica-Bold", 16)
-                p.drawString(50, height - 50, "Proposta Comercial - Móveis Planejados")
+                p.drawString(50, height - 40, "Proposta Comercial - Móveis Planejados")
                 p.setFont("Helvetica", 12)
-                p.drawString(50, height - 75, f"Projeto: {projeto_selecionado}")
+                p.drawString(50, height - 60, f"Projeto: {projeto_selecionado}")
                 
-                y = height - 120
+                y = height - 100
                 for item in itens:
-                    if y < 100:
+                    # Se o espaço na página estiver acabando, cria uma nova página
+                    if y < 180:
                         p.showPage()
                         y = height - 50
 
+                    # Desenha os textos do item
                     p.setFont("Helvetica-Bold", 11)
                     p.drawString(50, y, f"Ambiente: {item.get('ambiente')} | Fornecedor: {item.get('fornecedor')}")
                     p.setFont("Helvetica", 10)
-                    p.drawString(50, y - 18, f"Dimensões: {item.get('dimensoes')} | Preço: R$ {item.get('preco')}")
-                    y -= 50
+                    p.drawString(50, y - 15, f"Dimensões: {item.get('dimensoes')} | Preço: R$ {item.get('preco')}")
+
+                    # Se houver foto, baixa e insere no PDF
+                    foto_url = item.get('foto_url')
+                    if foto_url:
+                        try:
+                            response_img = requests.get(foto_url)
+                            if response_img.status_code == 200:
+                                img_io = io.BytesIO(response_img.content)
+                                
+                                # Abre a imagem com PIL para manipulação temporária
+                                img = PILImage.open(img_io)
+                                img_path = f"temp_{item.get('id')}.jpg"
+                                img.save(img_path)
+                                
+                                # Desenha a imagem no PDF (Posição X, Y, Largura, Altura)
+                                p.drawImage(img_path, 50, y - 130, width=100, height=100, preserveAspectRatio=True)
+                                
+                                # Remove o arquivo temporário da máquina
+                                if os.path.exists(img_path):
+                                    os.remove(img_path)
+                        except Exception as img_err:
+                            print(f"Erro ao inserir imagem no PDF: {img_err}")
+
+                    y -= 150 # Espaço vertical reservado para o próximo item com foto
 
                 p.save()
                 buffer.seek(0)
                 
                 st.download_button(
-                    label="📥 Clique aqui para baixar o PDF",
+                    label="📥 Baixar PDF Completo com Fotos",
                     data=buffer,
                     file_name=f"Proposta_{projeto_selecionado.replace(' ', '_')}.pdf",
                     mime="application/pdf"
