@@ -14,11 +14,12 @@ st.set_page_config(page_title="Sys Baby Kids - Móveis", layout="wide")
 st.markdown(
     """
     <style>
-        /* Oculta completamente o botão de recolher/expandir a barra lateral */
-        button[kind="header"] {
+        /* Oculta o botão de recolher a barra lateral de forma definitiva */
+        [data-testid="collapsedControl"] {
             display: none !important;
         }
-        [data-testid="collapsedControl"] {
+        /* Remove qualquer botão de fechar no topo do sidebar */
+        button[kind="tertiary"] {
             display: none !important;
         }
     </style>
