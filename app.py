@@ -57,7 +57,7 @@ with st.sidebar:
     elif senha_input:
         st.error("❌ Senha incorreta.")
 
-abas_nomes = ["📊 Catálogo & Geração de Proposta", "📦 Cadastrar Novo Item (Requer Senha)"]
+abas_nomes = ["📊 Catálogo & Seleção por Lista", "📦 Cadastrar Novo Item (Requer Senha)"]
 aba_pdf, aba_cad = st.tabs(abas_nomes)
 
 # --- FUNÇÃO PARA REMOVER ACENTOS E CARACTERES ESPECIAIS ---
@@ -157,56 +157,44 @@ with aba_cad:
                             st.success(f"{len(fotos_files)} foto(s) compactada(s) e cadastrada(s) com sucesso!")
 
 with aba_pdf:
-    st.header("Catálogo Geral & Busca Rápida")
+    st.header("Catálogo Geral & Seleção por Lista")
     
     try:
-        # Busca os itens ordenados alfabeticamente pelo nome (ambiente) no Supabase
+        # Busca os itens ordenados alfabeticamente pelo nome (ambiente)
         response = supabase.table("projetos_moveis").select("*").order("ambiente", desc=False).execute()
         itens = response.data if response.data else []
         
         if not itens:
             st.info("Nenhum item cadastrado no sistema ainda.")
         else:
-            # Barra de Pesquisa Rápida para filtrar facilmente entre centenas de itens
-            termo_busca = st.text_input("🔍 Digite para buscar um item por nome ou fornecedor:", placeholder="Ex: Berço, Guarda-roupa, Quater...")
+            # Cria a lista de opções em ordem alfabética para o selectbox
+            lista_nomes_itens = [item.get("ambiente") for item in itens]
             
-            # Filtra os itens com base na busca digitada
-            if termo_busca:
-                termo_lower = termo_busca.lower()
-                itens_filtrados = [
-                    i for i in itens 
-                    if termo_lower in str(i.get('ambiente', '')).lower() or termo_lower in str(i.get('fornecedor', '')).lower()
-                ]
-            else:
-                itens_filtrados = itens
-
-            st.markdown(f"Exibindo **{len(itens_filtrados)}** de **{len(itens)}** itens cadastrados (em ordem alfabética).")
-            st.markdown("---")
+            st.markdown("### Selecione um item na lista para visualizar, editar ou incluir:")
             
-            itens_selecionados = []
+            # Caixa de seleção (selectbox) em ordem alfabética onde você digita ou escolhe facilmente
+            item_selecionado_nome = st.selectbox("Escolha o item:", lista_nomes_itens)
             
-            for item in itens_filtrados:
-                item_id = item.get("id")
+            # Pega os dados do item escolhido na lista
+            item_atual = next((i for i in itens if i.get("ambiente") == item_selecionado_nome), None)
+            
+            if item_atual:
+                item_id = item_atual.get("id")
                 
                 with st.container(border=True):
-                    marcado = st.checkbox(f"Incluir na proposta: **{item.get('ambiente')}** (R$ {float(item.get('preco') or 0):,.2f})", value=True, key=f"item_{item_id}")
-                    
-                    if admin_autenticado:
-                        col_img, col_info, col_acoes = st.columns([1, 2.5, 1])
-                    else:
-                        col_img, col_info = st.columns([1, 3])
+                    col_img, col_info, col_acoes = st.columns([1, 2.5, 1]) if admin_autenticado else st.columns([1, 3])
                     
                     with col_img:
-                        if item.get("foto_url"):
-                            st.image(item["foto_url"], width=130)
+                        if item_atual.get("foto_url"):
+                            st.image(item_atual["foto_url"], width=150)
                         else:
                             st.info("Sem foto")
                     
                     with col_info:
-                        st.subheader(f"{item.get('ambiente')}")
-                        st.write(f"**Fornecedor:** {item.get('fornecedor') or 'Não informado'}")
-                        st.write(f"**Dimensões:** {item.get('dimensoes') or 'Não informado'}")
-                        st.markdown(f"<span style='color: #2C5E3B; font-weight: bold; font-size: 1.1em;'>R$ {float(item.get('preco') or 0):,.2f}</span>", unsafe_allow_html=True)
+                        st.subheader(f"{item_atual.get('ambiente')}")
+                        st.write(f"**Fornecedor:** {item_atual.get('fornecedor') or 'Não informado'}")
+                        st.write(f"**Dimensões:** {item_atual.get('dimensoes') or 'Não informado'}")
+                        st.markdown(f"<span style='color: #2C5E3B; font-weight: bold; font-size: 1.2em;'>R$ {float(item_atual.get('preco') or 0):,.2f}</span>", unsafe_allow_html=True)
                     
                     if admin_autenticado:
                         with col_acoes:
@@ -222,13 +210,14 @@ with aba_pdf:
                                 except Exception as e:
                                     st.error(f"Erro ao excluir: {e}")
 
+                # Bloco de edição caso clique em editar
                 if admin_autenticado and st.session_state.get(f"edit_mode_{item_id}", False):
                     with st.form(f"form_edit_{item_id}"):
-                        st.markdown(f"**Editando: {item.get('ambiente')}**")
-                        novo_ambiente = st.text_input("Nome do Item / Móvel *", value=item.get("ambiente"))
-                        novo_fornecedor = st.text_input("Fornecedor", value=item.get("fornecedor") or "")
-                        novas_dimensoes = st.text_input("Dimensões", value=item.get("dimensoes") or "")
-                        novo_preco = st.number_input("Preço (R$) *", min_value=0.0, value=float(item.get("preco") or 0.0), format="%.2f")
+                        st.markdown(f"**Editando: {item_atual.get('ambiente')}**")
+                        novo_ambiente = st.text_input("Nome do Item / Móvel *", value=item_atual.get("ambiente"))
+                        novo_fornecedor = st.text_input("Fornecedor", value=item_atual.get("fornecedor") or "")
+                        novas_dimensoes = st.text_input("Dimensões", value=item_atual.get("dimensoes") or "")
+                        novo_preco = st.number_input("Preço (R$) *", min_value=0.0, value=float(item_atual.get("preco") or 0.0), format="%.2f")
                         
                         col_e1, col_e2 = st.columns(2)
                         with col_e1:
@@ -257,16 +246,18 @@ with aba_pdf:
                 if admin_autenticado and locals().get('editar_click', False):
                     st.session_state[f"edit_mode_{item_id}"] = True
                     st.rerun()
-                
-                if marcado:
-                    itens_selecionados.append(item)
 
+            # Opção de gerar PDF com todos ou selecionar itens
             st.markdown("---")
             st.markdown("### Geração da Proposta Comercial")
             
+            gerar_todos = st.checkbox("Incluir todos os itens do catálogo na proposta", value=True)
+            
             if st.button("📄 Criar PDF Estilo Luxo", use_container_width=True):
+                itens_selecionados = itens if gerar_todos else ([item_atual] if item_atual else [])
+                
                 if not itens_selecionados:
-                    st.warning("Selecione pelo menos um item para gerar o PDF!")
+                    st.warning("Nenhum item selecionado para gerar o PDF!")
                 else:
                     buffer = io.BytesIO()
                     p = canvas.Canvas(buffer, pagesize=A4)
@@ -290,7 +281,7 @@ with aba_pdf:
 
                     p.setFillColor(colors.HexColor("#9CA3AF"))
                     p.setFont("Helvetica", 12)
-                    p.drawCentredString(width / 2, height / 2 - 40, "Catálogo Selecionado")
+                    p.drawCentredString(width / 2, height / 2 - 40, "Catálogo Geral")
                     
                     p.showPage()
 
