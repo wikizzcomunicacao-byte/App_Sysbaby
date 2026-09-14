@@ -8,6 +8,26 @@ import requests
 from PIL import Image as PILImage
 import os
 
+# --- CONFIGURAÇÃO DA PÁGINA E CSS PARA FIXAR A BARRA LATERAL ---
+st.set_page_config(page_title="Sys Baby Kids - Móveis", layout="wide")
+
+st.markdown(
+    """
+    <style>
+        /* Oculta o botão de recolher/expandir a barra lateral */
+        [data-testid="stSidebarNav"] + div, [data-testid="collapsedControl"] {
+            display: none !important;
+        }
+        /* Mantém a barra lateral aberta e fixa */
+        section[data-testid="stSidebar"] {
+            transform: none !important;
+            visibility: visible !important;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 # --- CONEXÃO SEGURA COM O SUPABASE ---
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
