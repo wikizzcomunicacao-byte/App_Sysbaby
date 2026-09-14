@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Painel de Móveis - Python & Supabase</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f7f6; padding: 20px; color: #333; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        input, button { width: 100%; padding: 10px; margin-top: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { background: #25D366; color: white; font-weight: bold; border: none; cursor: pointer; }
+        button:hover { background: #1ebe5d; }
+        .btn-pdf { background: #007BFF; margin-top: 20px; }
+        .btn-pdf:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Cadastro de Projeto</h2>
+    
+    <form id="formProjeto">
+        <label>Nome do Projeto / Cliente:</label>
+        <input type="text" id="projeto" name="projeto" required placeholder="Ex: Quarto da Mini">
+
+        <label>Ambiente / Móvel:</label>
+        <input type="text" id="ambiente" name="ambiente" required placeholder="Ex: Berço Safari">
+
+        <label>Fornecedor:</label>
+        <input type="text" id="fornecedor" name="fornecedor" placeholder="Ex: Marcenaria X">
+
+        <label>Dimensões:</label>
+        <input type="text" id="dimensoes" name="dimensoes" placeholder="Ex: 1.20 x 0.80m">
+
+        <label>Preço (R$):</label>
+        <input type="number" step="0.01" id="preco" name="preco" placeholder="0.00">
+
+        <label>Foto do Produto:</label>
+        <input type="file" id="foto" name="foto" accept="image/*">
+
+        <button type="submit">Salvar no Supabase</button>
+    </form>
+
+    <button class="btn-pdf" onclick="gerarPDF()">Gerar PDF do Projeto</button>
+</div>
+
+<script>
+    document.getElementById('formProjeto').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+
+        alert('Enviando dados...');
+        const response = await fetch('/api/cadastrar', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            alert('Salvo com sucesso!');
+            this.reset();
+        } else {
+            alert('Erro: ' + result.error);
+        }
+    });
+
+    function gerarPDF() {
+        const projeto = document.getElementById('projeto').value;
+        if (!projeto) {
+            alert('Digite o nome do projeto para gerar o PDF!');
+            return;
+        }
+        window.open(`/api/gerar-pdf/${encodeURIComponent(projeto)}`, '_blank');
+    }
+</script>
+
+</body>
+</html>
