@@ -57,7 +57,7 @@ with st.sidebar:
     elif senha_input:
         st.error("❌ Senha incorreta.")
 
-abas_nomes = ["📊 Gerar Proposta & Catálogo", "📦 Cadastrar Novo Item (Requer Senha)"]
+abas_nomes = ["📊 Catálogo & Geração de Proposta", "📦 Cadastrar Novo Item (Requer Senha)"]
 aba_pdf, aba_cad = st.tabs(abas_nomes)
 
 # --- FUNÇÃO PARA REMOVER ACENTOS E CARACTERES ESPECIAIS ---
@@ -109,7 +109,6 @@ with aba_cad:
                 if not ambiente or preco <= 0.0:
                     st.error("Preencha obrigatoriamente o Nome do Item e um Preço válido!")
                 else:
-                    # Valor padrão para satisfazer a coluna antiga "projeto" do Supabase
                     projeto_padrao = "Geral"
                     
                     if not fotos_files:
@@ -158,7 +157,7 @@ with aba_cad:
                             st.success(f"{len(fotos_files)} foto(s) compactada(s) e cadastrada(s) com sucesso!")
 
 with aba_pdf:
-    st.header("Catálogo Geral & Geração de Proposta")
+    st.header("Catálogo Geral & Seleção de Itens")
     
     try:
         response = supabase.table("projetos_moveis").select("*").execute()
@@ -167,13 +166,7 @@ with aba_pdf:
         if not itens:
             st.info("Nenhum item cadastrado no sistema ainda.")
         else:
-            col_sel1, col_sel2 = st.columns(2)
-            with col_sel1:
-                nome_cliente = st.text_input("Nome do Cliente / Projeto para a Proposta", placeholder="Ex: Quarto da Mini")
-            with col_sel2:
-                telefone_cliente = st.text_input("WhatsApp do Cliente (Opcional)", placeholder="17999998888")
-            
-            st.markdown("### Selecione os itens que farão parte desta proposta:")
+            st.markdown("### Selecione abaixo os itens que deseja incluir na proposta:")
             
             itens_selecionados = []
             
@@ -260,7 +253,7 @@ with aba_pdf:
                 if not itens_selecionados:
                     st.warning("Selecione pelo menos um item para gerar o PDF!")
                 else:
-                    nome_proj_pdf = nome_cliente.strip() if nome_cliente else "Proposta Exclusiva"
+                    nome_proj_pdf = "Proposta Exclusiva"
                     
                     buffer = io.BytesIO()
                     p = canvas.Canvas(buffer, pagesize=A4)
@@ -284,7 +277,7 @@ with aba_pdf:
 
                     p.setFillColor(colors.HexColor("#9CA3AF"))
                     p.setFont("Helvetica", 12)
-                    p.drawCentredString(width / 2, height / 2 - 40, f"Cliente / Projeto: {nome_proj_pdf}")
+                    p.drawCentredString(width / 2, height / 2 - 40, "Catálogo Selecionado")
                     
                     p.showPage()
 
@@ -372,7 +365,7 @@ with aba_pdf:
 
                     p.setFillColor(cor_destaque)
                     p.setFont("Helvetica", 14)
-                    p.drawCentredString(width / 2, height / 2 + 15, f"Projeto: {nome_proj_pdf}")
+                    p.drawCentredString(width / 2, height / 2 + 15, "Proposta Comercial")
 
                     p.setStrokeColor(cor_destaque)
                     p.setLineWidth(2)
@@ -391,9 +384,8 @@ with aba_pdf:
                     
                     st.session_state["pdf_gerado"] = True
                     st.session_state["pdf_data"] = buffer.getvalue()
-                    st.session_state["pdf_nome"] = f"Proposta_Luxo_{nome_proj_pdf.replace(' ', '_')}.pdf"
+                    st.session_state["pdf_nome"] = "Proposta_Luxo_SysBabyKids.pdf"
                     st.session_state["total_geral"] = total_geral_calc
-                    st.session_state["projeto_atual"] = nome_proj_pdf
 
             if st.session_state.get("pdf_gerado"):
                 st.success("PDF gerado com sucesso!")
@@ -407,10 +399,8 @@ with aba_pdf:
                 )
 
                 total_val = st.session_state.get("total_geral", 0)
-                proj_atual = st.session_state.get("projeto_atual", "Proposta")
-                texto_zap = urllib.parse.quote(f"Olá! Segue em anexo a proposta comercial do projeto *{proj_atual}* da Sys Baby Kids. Valor total: R$ {total_val:,.2f}.")
-                fone_limpo = "".join(filter(str.isdigit, telefone_cliente)) if telefone_cliente else ""
-                link_whatsapp = f"https://wa.me/55{fone_limpo}?text={texto_zap}" if fone_limpo else f"https://wa.me/?text={texto_zap}"
+                texto_zap = urllib.parse.quote(f"Olá! Segue em anexo a proposta comercial da Sys Baby Kids. Valor total: R$ {total_val:,.2f}.")
+                link_whatsapp = f"https://wa.me/?text={texto_zap}"
 
                 st.markdown(
                     f"""
