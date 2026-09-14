@@ -157,20 +157,35 @@ with aba_cad:
                             st.success(f"{len(fotos_files)} foto(s) compactada(s) e cadastrada(s) com sucesso!")
 
 with aba_pdf:
-    st.header("Catálogo Geral & Seleção de Itens")
+    st.header("Catálogo Geral & Busca Rápida")
     
     try:
-        response = supabase.table("projetos_moveis").select("*").execute()
+        # Busca os itens ordenados alfabeticamente pelo nome (ambiente) no Supabase
+        response = supabase.table("projetos_moveis").select("*").order("ambiente", desc=False).execute()
         itens = response.data if response.data else []
         
         if not itens:
             st.info("Nenhum item cadastrado no sistema ainda.")
         else:
-            st.markdown("### Selecione abaixo os itens que deseja incluir na proposta:")
+            # Barra de Pesquisa Rápida para filtrar facilmente entre centenas de itens
+            termo_busca = st.text_input("🔍 Digite para buscar um item por nome ou fornecedor:", placeholder="Ex: Berço, Guarda-roupa, Quater...")
+            
+            # Filtra os itens com base na busca digitada
+            if termo_busca:
+                termo_lower = termo_busca.lower()
+                itens_filtrados = [
+                    i for i in itens 
+                    if termo_lower in str(i.get('ambiente', '')).lower() or termo_lower in str(i.get('fornecedor', '')).lower()
+                ]
+            else:
+                itens_filtrados = itens
+
+            st.markdown(f"Exibindo **{len(itens_filtrados)}** de **{len(itens)}** itens cadastrados (em ordem alfabética).")
+            st.markdown("---")
             
             itens_selecionados = []
             
-            for item in itens:
+            for item in itens_filtrados:
                 item_id = item.get("id")
                 
                 with st.container(border=True):
@@ -253,8 +268,6 @@ with aba_pdf:
                 if not itens_selecionados:
                     st.warning("Selecione pelo menos um item para gerar o PDF!")
                 else:
-                    nome_proj_pdf = "Proposta Exclusiva"
-                    
                     buffer = io.BytesIO()
                     p = canvas.Canvas(buffer, pagesize=A4)
                     width, height = A4
