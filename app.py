@@ -14,7 +14,7 @@ import re
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Sys Baby Kids - Sistema de Móveis", layout="wide", page_icon="🗄️")
 
-# --- ESTILIZAÇÃO CSS CUSTOMIZADA PARA VISUAL DE LUXO ---
+# --- ESTILIZAÇÃO CSS CUSTOMIZADA PARA VISUAL DE LUXO E GRADE ---
 st.markdown("""
     <style>
         .main {
@@ -57,8 +57,8 @@ with st.sidebar:
     elif senha_input:
         st.error("❌ Senha incorreta.")
 
-abas_nomes = ["📊 Catálogo & Seleção por Lista", "📦 Cadastrar Novo Item (Requer Senha)"]
-aba_pdf, aba_cad = st.tabs(abas_nomes)
+abas_nomes = ["🖼️ Grade de Catálogo & Proposta", "📦 Cadastrar Novo Item (Requer Senha)"]
+aba_grade, aba_cad = st.tabs(abas_nomes)
 
 # --- FUNÇÃO PARA REMOVER ACENTOS E CARACTERES ESPECIAIS ---
 def limpar_nome_arquivo(texto):
@@ -90,7 +90,7 @@ with aba_cad:
     if not admin_autenticado:
         st.warning("🔒 O cadastro de novos itens é restrito. Digite a senha correta na barra lateral à esquerda para desbloquear.")
     else:
-        st.markdown("Preencha os dados abaixo. **Nome** e **Preço** são obrigatórios. Você pode selecionar **várias fotos** de uma vez.")
+        st.markdown("Preencha os dados abaixo. **Nome** e **Preço** são obrigatórios.")
         
         with st.form("form_cadastro", clear_on_submit=True):
             col_f1, col_f2 = st.columns(2)
@@ -132,7 +132,6 @@ with aba_cad:
                             except Exception as e:
                                 st.warning(f"Erro ao enviar a foto {foto_file.name}: {e}")
                     
-                    # Salva todas as URLs unidas por vírgula na coluna foto_url
                     dados = {
                         "projeto": projeto_padrao,
                         "ambiente": ambiente, 
@@ -144,9 +143,7 @@ with aba_cad:
                     supabase.table("projetos_moveis").insert(dados).execute()
                     st.success(f"Item cadastrado com sucesso com {len(urls_fotos)} foto(s)!")
 
-with aba_pdf:
-    st.header("Catálogo Geral & Seleção por Lista")
-    
+with aba_grade:
     try:
         response = supabase.table("projetos_moveis").select("*").order("ambiente", desc=False).execute()
         itens = response.data if response.data else []
@@ -154,104 +151,110 @@ with aba_pdf:
         if not itens:
             st.info("Nenhum item cadastrado no sistema ainda.")
         else:
-            lista_nomes_itens = [item.get("ambiente") for item in itens]
-            
-            st.markdown("### Selecione um item na lista para visualizar, editar ou incluir:")
-            
-            item_selecionado_nome = st.selectbox("Escolha o item:", lista_nomes_itens)
-            
-            item_atual = next((i for i in itens if i.get("ambiente") == item_selecionado_nome), None)
-            
-            if item_atual:
-                item_id = item_atual.get("id")
+            # Sistema de navegação por estado (Grade vs Detalhe do Item)
+            if "item_selecionado_id" not in st.session_state:
+                st.session_state["item_selecionado_id"] = None
+
+            # --- TELA 1: GRADE DE CARDS ---
+            if st.session_state["item_selecionado_id"] is None:
+                st.header("🖼️ Catálogo em Grade")
+                st.markdown("Clique em **'Ver Detalhes & Proposta'** em qualquer item para abrir a tela dedicada.")
                 
-                with st.container(border=True):
-                    if admin_autenticado:
-                        col_img, col_info, col_acoes = st.columns([1.5, 2, 1])
+                # Barra de busca rápida
+                termo_busca = st.text_input("🔍 Buscar item por nome ou fornecedor:", placeholder="Digite para filtrar...")
+                
+                if termo_busca:
+                    termo_lower = termo_busca.lower()
+                    itens_filtrados = [
+                        i for i in itens 
+                        if termo_lower in str(i.get('ambiente', '')).lower() or termo_lower in str(i.get('fornecedor', '')).lower()
+                    ]
+                else:
+                    itens_filtrados = itens
+
+                st.markdown("---")
+
+                # Exibe em colunas de 3 cards por linha (Grade)
+                colunas_por_linha = 3
+                for i in range(0, len(itens_filtrados), colunas_por_linha):
+                    cols = st.columns(colunas_por_linha)
+                    for j in range(colunas_por_linha):
+                        idx = i + j
+                        if idx < len(itens_filtrados):
+                            item = itens_filtrados[idx]
+                            with cols[j]:
+                                with st.container(border=True):
+                                    fotos_str = item.get("foto_url", "")
+                                    lista_urls = [url.strip() for url in fotos_str.split(",") if url.strip()]
+                                    
+                                    if lista_urls:
+                                        st.image(lista_urls[0], use_container_width=True)
+                                    else:
+                                        st.info("Sem foto")
+                                    
+                                    st.subheader(item.get("ambiente"))
+                                    st.write(f"**Fornecedor:** {item.get('fornecedor') or 'N/I'}")
+                                    st.markdown(f"<span style='color: #2C5E3B; font-weight: bold; font-size: 1.1em;'>R$ {float(item.get('preco') or 0):,.2f}</span>", unsafe_allow_html=True)
+                                    
+                                    if st.button("🔍 Ver Detalhes & Proposta", key=f"card_{item.get('id')}", use_container_width=True):
+                                        st.session_state["item_selecionado_id"] = item.get("id")
+                                        st.rerun()
+
+            # --- TELA 2: DETALHES DO ITEM E GERAÇÃO DE PDF ---
+            else:
+                item_atual = next((i for i in itens if i.get("id") == st.session_state["item_selecionado_id"]), None)
+                
+                if not item_atual:
+                    st.session_state["item_selecionado_id"] = None
+                    st.rerun()
+
+                if st.button("⬅️ Voltar para a Grade"):
+                    st.session_state["item_selecionado_id"] = None
+                    st.rerun()
+
+                st.header(f"📦 Detalhes: {item_atual.get('ambiente')}")
+                st.markdown("---")
+
+                col_det1, col_det2 = st.columns([1.5, 2])
+                
+                with col_det1:
+                    fotos_str = item_atual.get("foto_url", "")
+                    lista_urls = [url.strip() for url in fotos_str.split(",") if url.strip()]
+                    
+                    if lista_urls:
+                        st.write(f"**Fotos cadastradas ({len(lista_urls)}):**")
+                        cols_mini = st.columns(min(len(lista_urls), 2))
+                        for i, url in enumerate(lista_urls):
+                            with cols_mini[i % len(cols_mini)]:
+                                st.image(url, use_container_width=True)
                     else:
-                        col_img, col_info = st.columns([1.5, 2.5])
-                    
-                    with col_img:
-                        fotos_str = item_atual.get("foto_url", "")
-                        lista_urls = [url.strip() for url in fotos_str.split(",") if url.strip()]
-                        
-                        if lista_urls:
-                            st.write(f"**Fotos cadastradas ({len(lista_urls)}):**")
-                            # Exibe todas as fotos em miniatura lado a lado na tela
-                            cols_mini = st.columns(min(len(lista_urls), 3))
-                            for i, url in enumerate(lista_urls):
-                                with cols_mini[i % len(cols_mini)]:
-                                    st.image(url, width=90)
-                        else:
-                            st.info("Sem foto cadastrada")
-                    
-                    with col_info:
-                        st.subheader(f"{item_atual.get('ambiente')}")
-                        st.write(f"**Fornecedor:** {item_atual.get('fornecedor') or 'Não informado'}")
-                        st.write(f"**Dimensões:** {item_atual.get('dimensoes') or 'Não informado'}")
-                        st.markdown(f"<span style='color: #2C5E3B; font-weight: bold; font-size: 1.2em;'>R$ {float(item_atual.get('preco') or 0):,.2f}</span>", unsafe_allow_html=True)
+                        st.info("Nenhuma foto cadastrada.")
+
+                with col_det2:
+                    st.subheader("Informações do Produto")
+                    st.write(f"**Nome / Ambiente:** {item_atual.get('ambiente')}")
+                    st.write(f"**Fornecedor:** {item_atual.get('fornecedor') or 'Não informado'}")
+                    st.write(f"**Dimensões:** {item_atual.get('dimensoes') or 'Não informado'}")
+                    st.markdown(f"**Preço:** <span style='color: #2C5E3B; font-size: 1.3em;'>R$ {float(item_atual.get('preco') or 0):,.2f}</span>", unsafe_allow_html=True)
                     
                     if admin_autenticado:
-                        with col_acoes:
-                            st.write("**Ações Admin:**")
-                            editar_click = st.button("✏️ Editar", key=f"edit_btn_{item_id}", use_container_width=True)
-                            excluir_click = st.button("🗑️ Excluir", key=f"del_btn_{item_id}", use_container_width=True)
-                            
-                            if excluir_click:
+                        st.markdown("---")
+                        st.write("**Painel Administrativo:**")
+                        col_a1, col_a2 = st.columns(2)
+                        with col_a1:
+                            if st.button("🗑️ Excluir Item", use_container_width=True):
                                 try:
-                                    supabase.table("projetos_moveis").delete().eq("id", item_id).execute()
+                                    supabase.table("projetos_moveis").delete().eq("id", item_atual.get("id")).execute()
                                     st.success("Item excluído com sucesso!")
+                                    st.session_state["item_selecionado_id"] = None
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"Erro ao excluir: {e}")
 
-                if admin_autenticado and st.session_state.get(f"edit_mode_{item_id}", False):
-                    with st.form(f"form_edit_{item_id}"):
-                        st.markdown(f"**Editando: {item_atual.get('ambiente')}**")
-                        novo_ambiente = st.text_input("Nome do Item / Móvel *", value=item_atual.get("ambiente"))
-                        novo_fornecedor = st.text_input("Fornecedor", value=item_atual.get("fornecedor") or "")
-                        novas_dimensoes = st.text_input("Dimensões", value=item_atual.get("dimensoes") or "")
-                        novo_preco = st.number_input("Preço (R$) *", min_value=0.0, value=float(item_atual.get("preco") or 0.0), format="%.2f")
-                        
-                        col_e1, col_e2 = st.columns(2)
-                        with col_e1:
-                            salvar_edicao = st.form_submit_button("💾 Salvar", use_container_width=True)
-                        with col_e2:
-                            cancelar_edicao = st.form_submit_button("❌ Cancelar", use_container_width=True)
-                        
-                        if salvar_edicao:
-                            if not novo_ambiente or novo_preco <= 0.0:
-                                st.error("Nome e Preço são obrigatórios!")
-                            else:
-                                supabase.table("projetos_moveis").update({
-                                    "ambiente": novo_ambiente,
-                                    "fornecedor": novo_fornecedor,
-                                    "dimensoes": novas_dimensoes,
-                                    "preco": novo_preco
-                                }).eq("id", item_id).execute()
-                                st.session_state[f"edit_mode_{item_id}"] = False
-                                st.success("Salvo com sucesso!")
-                                st.rerun()
-                        
-                        if cancelar_edicao:
-                            st.session_state[f"edit_mode_{item_id}"] = False
-                            st.rerun()
-
-                if admin_autenticado and locals().get('editar_click', False):
-                    st.session_state[f"edit_mode_{item_id}"] = True
-                    st.rerun()
-
-            st.markdown("---")
-            st.markdown("### Geração da Proposta Comercial")
-            
-            gerar_todos = st.checkbox("Incluir todos os itens do catálogo na proposta", value=True)
-            
-            if st.button("📄 Criar PDF Estilo Luxo", use_container_width=True):
-                itens_selecionados = itens if gerar_todos else ([item_atual] if item_atual else [])
+                st.markdown("---")
+                st.markdown("### Geração de Proposta em PDF para este Item")
                 
-                if not itens_selecionados:
-                    st.warning("Nenhum item selecionado para gerar o PDF!")
-                else:
+                if st.button("📄 Criar PDF Exclusivo deste Item", use_container_width=True):
                     buffer = io.BytesIO()
                     p = canvas.Canvas(buffer, pagesize=A4)
                     width, height = A4
@@ -260,162 +263,107 @@ with aba_pdf:
                     cor_destaque = colors.HexColor("#D97706")
                     cor_texto_cinza = colors.HexColor("#4B5563")
 
-                    # --- CAPA ---
+                    # Capa
                     p.setFillColor(cor_fundo_topo)
                     p.rect(0, 0, width, height, fill=1, stroke=0)
-
                     p.setFillColor(colors.white)
                     p.setFont("Helvetica-Bold", 28)
                     p.drawCentredString(width / 2, height / 2 + 40, "PROPOSTA EXCLUSIVA")
-                    
                     p.setFillColor(cor_destaque)
                     p.setFont("Helvetica", 14)
                     p.drawCentredString(width / 2, height / 2, "SYS BABY KIDS")
-
                     p.setFillColor(colors.HexColor("#9CA3AF"))
                     p.setFont("Helvetica", 12)
-                    p.drawCentredString(width / 2, height / 2 - 40, "Catálogo Geral")
-                    
+                    p.drawCentredString(width / 2, height / 2 - 40, f"Item: {item_atual.get('ambiente')}")
                     p.showPage()
 
-                    total_geral_calc = 0
+                    # Páginas de fotos do item
+                    lista_urls_pdf = lista_urls if lista_urls else [""]
+                    for foto_idx, foto_url in enumerate(lista_urls_pdf, 1):
+                        p.setFillColor(colors.HexColor("#F9FAFB"))
+                        p.rect(0, 0, width, height, fill=1, stroke=0)
 
-                    # --- PÁGINAS DE VITRINE (Cada foto de cada item ganha sua página ou destaque) ---
-                    pagina_contador = 0
-                    for item in itens_selecionados:
-                        try:
-                            total_geral_calc += float(item.get('preco') or 0)
-                        except:
-                            pass
+                        p.setFillColor(cor_fundo_topo)
+                        p.rect(0, height - 50, width, 50, fill=1, stroke=0)
+                        p.setFillColor(colors.white)
+                        p.setFont("Helvetica-Bold", 12)
+                        p.drawString(40, height - 30, "SYS BABY KIDS")
+                        p.setFont("Helvetica", 10)
+                        p.drawRightString(width - 40, height - 30, f"Foto {foto_idx} de {len(lista_urls_pdf)}")
 
-                        fotos_str = item.get("foto_url", "")
-                        lista_urls = [url.string if hasattr(url, 'string') else str(url).strip() for url in fotos_str.split(",") if url.strip()]
-                        
-                        # Se o item tiver fotos, gera uma página para cada foto; se não tiver, gera uma página padrão sem foto
-                        if not lista_urls:
-                            lista_urls = [""]
+                        p.setFillColor(cor_fundo_topo)
+                        p.setFont("Helvetica-Bold", 18)
+                        p.drawString(40, height - 90, f"{item_atual.get('ambiente').upper()}")
 
-                        for foto_idx, foto_url in enumerate(lista_urls, 1):
-                            pagina_contador += 1
-                            
-                            p.setFillColor(colors.HexColor("#F9FAFB"))
-                            p.rect(0, 0, width, height, fill=1, stroke=0)
+                        p.setFont("Helvetica", 11)
+                        p.setFillColor(cor_texto_cinza)
+                        p.drawString(40, height - 115, f"Fornecedor: {item_atual.get('fornecedor') or 'Exclusivo'}")
+                        p.drawString(250, height - 115, f"Dimensões: {item_atual.get('dimensoes') or 'Sob Medida'}")
 
-                            p.setFillColor(cor_fundo_topo)
-                            p.rect(0, height - 50, width, 50, fill=1, stroke=0)
-                            p.setFillColor(colors.white)
-                            p.setFont("Helvetica-Bold", 12)
-                            p.drawString(40, height - 30, "SYS BABY KIDS")
-                            p.setFont("Helvetica", 10)
-                            p.drawRightString(width - 40, height - 30, f"Item: {item.get('ambiente')} (Foto {foto_idx})")
+                        preco_val = item_atual.get('preco') or 0.0
+                        p.setFont("Helvetica-Bold", 14)
+                        p.setFillColor(cor_destaque)
+                        p.drawRightString(width - 40, height - 115, f"R$ {float(preco_val):,.2f}")
 
-                            p.setFillColor(cor_fundo_topo)
-                            p.setFont("Helvetica-Bold", 18)
-                            p.drawString(40, height - 90, f"{item.get('ambiente').upper()}")
+                        p.setStrokeColor(colors.HexColor("#E5E7EB"))
+                        p.setLineWidth(1)
+                        p.line(40, height - 130, width - 40, height - 130)
 
-                            p.setFont("Helvetica", 11)
-                            p.setFillColor(cor_texto_cinza)
-                            p.drawString(40, height - 115, f"Fornecedor: {item.get('fornecedor') or 'Exclusivo'}")
-                            p.drawString(250, height - 115, f"Dimensões: {item.get('dimensoes') or 'Sob Medida'}")
+                        p.setFillColor(colors.white)
+                        p.setStrokeColor(colors.HexColor("#D1D5DB"))
+                        p.roundRect(35, 120, width - 70, height - 280, 8, fill=1, stroke=1)
 
-                            preco_val = item.get('preco') or 0.0
-                            p.setFont("Helvetica-Bold", 14)
-                            p.setFillColor(cor_destaque)
-                            p.drawRightString(width - 40, height - 115, f"R$ {float(preco_val):,.2f}")
+                        imagem_carregada = False
+                        if foto_url and foto_url.strip() != "":
+                            try:
+                                response_img = requests.get(foto_url.strip(), timeout=10)
+                                if response_img.status_code == 200:
+                                    img_io = io.BytesIO(response_img.content)
+                                    img = PILImage.open(img_io)
+                                    img_path = f"temp_detalhe_{foto_idx}.jpg"
+                                    img.save(img_path)
+                                    p.drawImage(img_path, 50, 135, width=width - 100, height=height - 280, preserveAspectRatio=True, anchor='c')
+                                    imagem_carregada = True
+                                    if os.path.exists(img_path):
+                                        os.remove(img_path)
+                            except Exception as img_err:
+                                print(f"Erro imagem PDF: {img_err}")
 
-                            p.setStrokeColor(colors.HexColor("#E5E7EB"))
-                            p.setLineWidth(1)
-                            p.line(40, height - 130, width - 40, height - 130)
+                        if not imagem_carregada:
+                            p.setFillColor(colors.HexColor("#9CA3AF"))
+                            p.setFont("Helvetica", 12)
+                            p.drawCentredString(width / 2, height / 2, "Sem foto cadastrada")
 
-                            p.setFillColor(colors.white)
-                            p.setStrokeColor(colors.HexColor("#D1D5DB"))
-                            p.roundRect(35, 120, width - 70, height - 280, 8, fill=1, stroke=1)
-
-                            imagem_carregada = False
-                            if foto_url and foto_url.strip() != "":
-                                try:
-                                    response_img = requests.get(foto_url.strip(), timeout=10)
-                                    if response_img.status_code == 200:
-                                        img_io = io.BytesIO(response_img.content)
-                                        img = PILImage.open(img_io)
-                                        
-                                        img_path = f"temp_pdf_{pagina_contador}.jpg"
-                                        img.save(img_path)
-                                        
-                                        p.drawImage(img_path, 50, 135, width=width - 100, height=height - 280, preserveAspectRatio=True, anchor='c')
-                                        imagem_carregada = True
-                                        
-                                        if os.path.exists(img_path):
-                                            os.remove(img_path)
-                                except Exception as img_err:
-                                    print(f"Erro ao inserir imagem PDF: {img_err}")
-
-                            if not imagem_carregada:
-                                p.setFillColor(colors.HexColor("#9CA3AF"))
-                                p.setFont("Helvetica", 12)
-                                p.drawCentredString(width / 2, height / 2, "Sem foto cadastrada para este item")
-
-                            p.setFillColor(cor_texto_cinza)
-                            p.setFont("Helvetica", 9)
-                            p.drawCentredString(width / 2, 40, "Documento confidencial gerado para apresentação comercial.")
-
-                            p.showPage()
-
-                    # --- RESUMO ---
-                    p.setFillColor(cor_fundo_topo)
-                    p.rect(0, 0, width, height, fill=1, stroke=0)
-
-                    p.setFillColor(colors.white)
-                    p.setFont("Helvetica-Bold", 22)
-                    p.drawCentredString(width / 2, height / 2 + 60, "RESUMO DO INVESTIMENTO")
-
-                    p.setFillColor(cor_destaque)
-                    p.setFont("Helvetica", 14)
-                    p.drawCentredString(width / 2, height / 2 + 15, "Proposta Comercial")
-
-                    p.setStrokeColor(cor_destaque)
-                    p.setLineWidth(2)
-                    p.roundRect(width / 2 - 180, height / 2 - 70, 360, 60, 6, fill=0, stroke=1)
-
-                    p.setFillColor(colors.white)
-                    p.setFont("Helvetica-Bold", 18)
-                    p.drawCentredString(width / 2, height / 2 - 35, f"VALOR TOTAL: R$ {total_geral_calc:,.2f}")
-
-                    p.setFont("Helvetica", 10)
-                    p.setFillColor(colors.HexColor("#9CA3AF"))
-                    p.drawCentredString(width / 2, 80, "Agradecemos a preferência. Estamos à disposição para iniciar seu projeto.")
+                        p.showPage()
 
                     p.save()
                     buffer.seek(0)
                     
-                    st.session_state["pdf_gerado"] = True
-                    st.session_state["pdf_data"] = buffer.getvalue()
-                    st.session_state["pdf_nome"] = "Proposta_Luxo_SysBabyKids.pdf"
-                    st.session_state["total_geral"] = total_geral_calc
+                    st.session_state["pdf_gerado_detalhe"] = buffer.getvalue()
+                    st.session_state["pdf_nome_detalhe"] = f"Proposta_{limpar_nome_arquivo(item_atual.get('ambiente'))}.pdf"
 
-            if st.session_state.get("pdf_gerado"):
-                st.success("PDF gerado com sucesso!")
-                
-                st.download_button(
-                    label="📥 Baixar Proposta em PDF",
-                    data=st.session_state["pdf_data"],
-                    file_name=st.session_state["pdf_nome"],
-                    mime="application/pdf",
-                    use_container_width=True
-                )
+                if "pdf_gerado_detalhe" in st.session_state:
+                    st.success("PDF gerado com sucesso!")
+                    st.download_button(
+                        label="📥 Baixar PDF deste Item",
+                        data=st.session_state["pdf_gerado_detalhe"],
+                        file_name=st.session_state["pdf_nome_detalhe"],
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
 
-                total_val = st.session_state.get("total_geral", 0)
-                texto_zap = urllib.parse.quote(f"Olá! Segue em anexo a proposta comercial da Sys Baby Kids. Valor total: R$ {total_val:,.2f}.")
-                link_whatsapp = f"https://wa.me/?text={texto_zap}"
+                    preco_item = float(item_atual.get('preco') or 0)
+                    texto_zap = urllib.parse.quote(f"Olá! Segue proposta do item *{item_atual.get('ambiente')}* da Sys Baby Kids. Valor: R$ {preco_item:,.2f}.")
+                    link_whatsapp = f"https://wa.me/?text={texto_zap}"
 
-                st.markdown(
-                    f"""
-                    <a href="{link_whatsapp}" target="_blank" style="display:block;text-align:center;padding:12px 20px;background-color:#25D366;color:white;text-decoration:none;font-weight:bold;border-radius:6px;margin-top:10px;">
-                        💬 Abrir WhatsApp com Mensagem Pronta
-                    </a>
-                    """,
-                    unsafe_allow_html=True
-                )
+                    st.markdown(
+                        f"""
+                        <a href="{link_whatsapp}" target="_blank" style="display:block;text-align:center;padding:12px 20px;background-color:#25D366;color:white;text-decoration:none;font-weight:bold;border-radius:6px;margin-top:10px;">
+                            💬 Abrir WhatsApp com Mensagem Pronta
+                        </a>
+                        """,
+                        unsafe_allow_html=True
+                    )
 
     except Exception as e:
         st.error(f"Erro ao carregar dados do Supabase: {e}")
