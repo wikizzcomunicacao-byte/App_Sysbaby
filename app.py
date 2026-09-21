@@ -90,7 +90,7 @@ with aba_cad:
     if not admin_autenticado:
         st.warning("🔒 O cadastro de novos itens é restrito. Digite a senha correta na barra lateral à esquerda para desbloquear.")
     else:
-        st.markdown("Preencha os dados abaixo. **Nome** e **Preço** são obrigatórios.")
+        st.markdown("Preencha os dados abaixo. **Nome** e **Preço** são obrigatórios. Você pode selecionar **várias fotos** de uma vez.")
         
         with st.form("form_cadastro", clear_on_submit=True):
             col_f1, col_f2 = st.columns(2)
@@ -101,7 +101,7 @@ with aba_cad:
                 dimensoes = st.text_input("Dimensões (Ex: 1.20 x 0.80m)")
                 preco = st.number_input("Preço (R$) *", min_value=0.0, format="%.2f")
             
-            fotos_files = st.file_uploader("Fotos do Produto", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+            fotos_files = st.file_uploader("Fotos do Produto (Várias permitidas)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
             
             submitted = st.form_submit_button("💾 Salvar no Sistema", use_container_width=True)
             
@@ -110,27 +110,16 @@ with aba_cad:
                     st.error("Preencha obrigatoriamente o Nome do Item e um Preço válido!")
                 else:
                     projeto_padrao = "Geral"
+                    urls_fotos = []
                     
-                    if not fotos_files:
-                        dados = {
-                            "projeto": projeto_padrao,
-                            "ambiente": ambiente, 
-                            "fornecedor": fornecedor, 
-                            "dimensoes": dimensoes, 
-                            "preco": preco, 
-                            "foto_url": ""
-                        }
-                        supabase.table("projetos_moveis").insert(dados).execute()
-                        st.success("Item cadastrado com sucesso (sem foto)!")
-                    else:
-                        sucesso = True
-                        for foto_file in fotos_files:
+                    if fotos_files:
+                        for idx, foto_file in enumerate(fotos_files):
                             try:
                                 foto_otimizada = otimizar_imagem(foto_file)
                                 file_bytes = foto_otimizada.read()
                                 
                                 nome_original_limpo = limpar_nome_arquivo(os.path.splitext(foto_file.name)[0])
-                                file_name = f"{limpar_nome_arquivo(ambiente)}_{nome_original_limpo}.jpg"
+                                file_name = f"{limpar_nome_arquivo(ambiente)}_{idx}_{nome_original_limpo}.jpg"
                                 
                                 supabase.storage.from_("fotos-moveis").upload(
                                     file=file_bytes,
@@ -139,22 +128,21 @@ with aba_cad:
                                 )
                                 
                                 public_url = supabase.storage.from_("fotos-moveis").get_public_url(file_name)
-                                
-                                dados = {
-                                    "projeto": projeto_padrao,
-                                    "ambiente": ambiente,
-                                    "fornecedor": fornecedor,
-                                    "dimensoes": dimensoes,
-                                    "preco": preco,
-                                    "foto_url": public_url
-                                }
-                                supabase.table("projetos_moveis").insert(dados).execute()
+                                urls_fotos.append(public_url)
                             except Exception as e:
-                                sucesso = False
                                 st.warning(f"Erro ao enviar a foto {foto_file.name}: {e}")
-                        
-                        if sucesso:
-                            st.success(f"{len(fotos_files)} foto(s) compactada(s) e cadastrada(s) com sucesso!")
+                    
+                    # Salva todas as URLs unidas por vírgula na coluna foto_url
+                    dados = {
+                        "projeto": projeto_padrao,
+                        "ambiente": ambiente, 
+                        "fornecedor": fornecedor, 
+                        "dimensoes": dimensoes, 
+                        "preco": preco, 
+                        "foto_url": ",".join(urls_fotos)
+                    }
+                    supabase.table("projetos_moveis").insert(dados).execute()
+                    st.success(f"Item cadastrado com sucesso com {len(urls_fotos)} foto(s)!")
 
 with aba_pdf:
     st.header("Catálogo Geral & Seleção por Lista")
@@ -179,15 +167,23 @@ with aba_pdf:
                 
                 with st.container(border=True):
                     if admin_autenticado:
-                        col_img, col_info, col_acoes = st.columns([1, 2.5, 1])
+                        col_img, col_info, col_acoes = st.columns([1.5, 2, 1])
                     else:
-                        col_img, col_info = st.columns([1, 3])
+                        col_img, col_info = st.columns([1.5, 2.5])
                     
                     with col_img:
-                        if item_atual.get("foto_url"):
-                            st.image(item_atual["foto_url"], width=150)
+                        fotos_str = item_atual.get("foto_url", "")
+                        lista_urls = [url.strip() for url in fotos_str.split(",") if url.strip()]
+                        
+                        if lista_urls:
+                            st.write(f"**Fotos cadastradas ({len(lista_urls)}):**")
+                            # Exibe todas as fotos em miniatura lado a lado na tela
+                            cols_mini = st.columns(min(len(lista_urls), 3))
+                            for i, url in enumerate(lista_urls):
+                                with cols_mini[i % len(cols_mini)]:
+                                    st.image(url, width=90)
                         else:
-                            st.info("Sem foto")
+                            st.info("Sem foto cadastrada")
                     
                     with col_info:
                         st.subheader(f"{item_atual.get('ambiente')}")
@@ -284,77 +280,86 @@ with aba_pdf:
 
                     total_geral_calc = 0
 
-                    # --- PÁGINAS DE VITRINE ---
-                    for idx, item in enumerate(itens_selecionados, 1):
+                    # --- PÁGINAS DE VITRINE (Cada foto de cada item ganha sua página ou destaque) ---
+                    pagina_contador = 0
+                    for item in itens_selecionados:
                         try:
                             total_geral_calc += float(item.get('preco') or 0)
                         except:
                             pass
 
-                        p.setFillColor(colors.HexColor("#F9FAFB"))
-                        p.rect(0, 0, width, height, fill=1, stroke=0)
+                        fotos_str = item.get("foto_url", "")
+                        lista_urls = [url.string if hasattr(url, 'string') else str(url).strip() for url in fotos_str.split(",") if url.strip()]
+                        
+                        # Se o item tiver fotos, gera uma página para cada foto; se não tiver, gera uma página padrão sem foto
+                        if not lista_urls:
+                            lista_urls = [""]
 
-                        p.setFillColor(cor_fundo_topo)
-                        p.rect(0, height - 50, width, 50, fill=1, stroke=0)
-                        p.setFillColor(colors.white)
-                        p.setFont("Helvetica-Bold", 12)
-                        p.drawString(40, height - 30, "SYS BABY KIDS")
-                        p.setFont("Helvetica", 10)
-                        p.drawRightString(width - 40, height - 30, f"Peça {idx} de {len(itens_selecionados)}")
+                        for foto_idx, foto_url in enumerate(lista_urls, 1):
+                            pagina_contador += 1
+                            
+                            p.setFillColor(colors.HexColor("#F9FAFB"))
+                            p.rect(0, 0, width, height, fill=1, stroke=0)
 
-                        p.setFillColor(cor_fundo_topo)
-                        p.setFont("Helvetica-Bold", 18)
-                        p.drawString(40, height - 90, f"{item.get('ambiente').upper()}")
+                            p.setFillColor(cor_fundo_topo)
+                            p.rect(0, height - 50, width, 50, fill=1, stroke=0)
+                            p.setFillColor(colors.white)
+                            p.setFont("Helvetica-Bold", 12)
+                            p.drawString(40, height - 30, "SYS BABY KIDS")
+                            p.setFont("Helvetica", 10)
+                            p.drawRightString(width - 40, height - 30, f"Item: {item.get('ambiente')} (Foto {foto_idx})")
 
-                        p.setFont("Helvetica", 11)
-                        p.setFillColor(cor_texto_cinza)
-                        p.drawString(40, height - 115, f"Fornecedor: {item.get('fornecedor') or 'Exclusivo'}")
-                        p.drawString(250, height - 115, f"Dimensões: {item.get('dimensoes') or 'Sob Medida'}")
+                            p.setFillColor(cor_fundo_topo)
+                            p.setFont("Helvetica-Bold", 18)
+                            p.drawString(40, height - 90, f"{item.get('ambiente').upper()}")
 
-                        preco_val = item.get('preco') or 0.0
-                        p.setFont("Helvetica-Bold", 14)
-                        p.setFillColor(cor_destaque)
-                        p.drawRightString(width - 40, height - 115, f"R$ {float(preco_val):,.2f}")
+                            p.setFont("Helvetica", 11)
+                            p.setFillColor(cor_texto_cinza)
+                            p.drawString(40, height - 115, f"Fornecedor: {item.get('fornecedor') or 'Exclusivo'}")
+                            p.drawString(250, height - 115, f"Dimensões: {item.get('dimensoes') or 'Sob Medida'}")
 
-                        p.setStrokeColor(colors.HexColor("#E5E7EB"))
-                        p.setLineWidth(1)
-                        p.line(40, height - 130, width - 40, height - 130)
+                            preco_val = item.get('preco') or 0.0
+                            p.setFont("Helvetica-Bold", 14)
+                            p.setFillColor(cor_destaque)
+                            p.drawRightString(width - 40, height - 115, f"R$ {float(preco_val):,.2f}")
 
-                        p.setFillColor(colors.white)
-                        p.setStrokeColor(colors.HexColor("#D1D5DB"))
-                        p.roundRect(35, 120, width - 70, height - 280, 8, fill=1, stroke=1)
+                            p.setStrokeColor(colors.HexColor("#E5E7EB"))
+                            p.setLineWidth(1)
+                            p.line(40, height - 130, width - 40, height - 130)
 
-                        foto_url = item.get('foto_url')
-                        imagem_carregada = False
+                            p.setFillColor(colors.white)
+                            p.setStrokeColor(colors.HexColor("#D1D5DB"))
+                            p.roundRect(35, 120, width - 70, height - 280, 8, fill=1, stroke=1)
 
-                        if foto_url and foto_url.strip() != "":
-                            try:
-                                response_img = requests.get(foto_url.strip(), timeout=10)
-                                if response_img.status_code == 200:
-                                    img_io = io.BytesIO(response_img.content)
-                                    img = PILImage.open(img_io)
-                                    
-                                    img_path = f"temp_item_{idx}.jpg"
-                                    img.save(img_path)
-                                    
-                                    p.drawImage(img_path, 50, 135, width=width - 100, height=height - 280, preserveAspectRatio=True, anchor='c')
-                                    imagem_carregada = True
-                                    
-                                    if os.path.exists(img_path):
-                                        os.remove(img_path)
-                            except Exception as img_err:
-                                print(f"Erro ao inserir imagem {idx}: {img_err}")
+                            imagem_carregada = False
+                            if foto_url and foto_url.strip() != "":
+                                try:
+                                    response_img = requests.get(foto_url.strip(), timeout=10)
+                                    if response_img.status_code == 200:
+                                        img_io = io.BytesIO(response_img.content)
+                                        img = PILImage.open(img_io)
+                                        
+                                        img_path = f"temp_pdf_{pagina_contador}.jpg"
+                                        img.save(img_path)
+                                        
+                                        p.drawImage(img_path, 50, 135, width=width - 100, height=height - 280, preserveAspectRatio=True, anchor='c')
+                                        imagem_carregada = True
+                                        
+                                        if os.path.exists(img_path):
+                                            os.remove(img_path)
+                                except Exception as img_err:
+                                    print(f"Erro ao inserir imagem PDF: {img_err}")
 
-                        if not imagem_carregada:
-                            p.setFillColor(colors.HexColor("#9CA3AF"))
-                            p.setFont("Helvetica", 12)
-                            p.drawCentredString(width / 2, height / 2, "Sem foto cadastrada para este item")
+                            if not imagem_carregada:
+                                p.setFillColor(colors.HexColor("#9CA3AF"))
+                                p.setFont("Helvetica", 12)
+                                p.drawCentredString(width / 2, height / 2, "Sem foto cadastrada para este item")
 
-                        p.setFillColor(cor_texto_cinza)
-                        p.setFont("Helvetica", 9)
-                        p.drawCentredString(width / 2, 40, "Documento confidencial gerado para apresentação comercial.")
+                            p.setFillColor(cor_texto_cinza)
+                            p.setFont("Helvetica", 9)
+                            p.drawCentredString(width / 2, 40, "Documento confidencial gerado para apresentação comercial.")
 
-                        p.showPage()
+                            p.showPage()
 
                     # --- RESUMO ---
                     p.setFillColor(cor_fundo_topo)
